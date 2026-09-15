@@ -82,10 +82,10 @@ static id<ATLPasteboardReading> ATLPasteboard = nil;
         return NO;
     }
 
-    return [self handleOpenURL:activity.webpageURL];
+    return [self handleURL:activity.webpageURL];
 }
 
-+ (BOOL)handleOpenURL:(NSURL *)url {
++ (BOOL)handleURL:(NSURL *)url {
     ATLLinkURL *link = [ATLLinkURL parse:url.absoluteString];
 
     if (link == nil) {

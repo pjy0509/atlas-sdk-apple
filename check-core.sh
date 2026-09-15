@@ -36,4 +36,13 @@ clang -fsyntax-only -fobjc-arc -target arm64-apple-ios12.0 -isysroot "$IOS_SDK" 
     "$SOURCES"/Core/*.m "$SOURCES"/Links/*.m
 echo "parity: the UIKit binding compiles for ios12"
 
+# Swift consumes this as a module; the test target holds that shape. The
+# exit code is the verdict — "0 failures" contains the word.
+if ! swift test --quiet > "$OUT/swift-test.log" 2>&1; then
+    tail -30 "$OUT/swift-test.log" >&2
+    exit 1
+fi
+
+echo "parity: swift imports the module and reads the shared names"
+
 sh tools/check-golden.sh "$OUT/envelopes" atlas-apple ios clipboard

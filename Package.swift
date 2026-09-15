@@ -19,5 +19,11 @@ let package = Package(
             path: "Sources/AppAtlasSDK",
             publicHeadersPath: "include"
         ),
+        // Swift consumes this as a module; the test holds that shape in place.
+        .testTarget(
+            name: "AppAtlasSDKTests",
+            dependencies: ["AppAtlasSDK"],
+            path: "Tests/AppAtlasSDKTests"
+        ),
     ]
 )

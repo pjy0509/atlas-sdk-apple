@@ -30,7 +30,8 @@ NS_ASSUME_NONNULL_BEGIN
 /// and from the delegate:
 ///
 ///     [ATLLinks handleUserActivity:activity];
-///     [ATLLinks handleOpenURL:url];
+///     [ATLLinks handleURL:url];
+NS_SWIFT_NAME(AtlasLinks)
 @interface ATLLinks : NSObject
 
 /// Called by Atlas through NSClassFromString; not application API.
@@ -42,10 +43,10 @@ NS_ASSUME_NONNULL_BEGIN
 + (nullable ATLLink *)firstReferringLink;
 
 /// Universal Link arrivals. Returns YES when the activity was a visit URL.
-+ (BOOL)handleUserActivity:(NSUserActivity *)activity;
++ (BOOL)handleUserActivity:(NSUserActivity *)activity NS_SWIFT_NAME(handle(userActivity:));
 
 /// Custom-scheme and handoff arrivals. Returns YES when the URL was ours.
-+ (BOOL)handleOpenURL:(NSURL *)url;
++ (BOOL)handleURL:(NSURL *)url NS_SWIFT_NAME(handle(_:));
 
 /// The consented clipboard read, once per install and only on the install's
 /// own first run: hasURLs pre-check (no prompt), then the read (the prompt),

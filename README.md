@@ -21,6 +21,30 @@ pod 'AppAtlasSDK/Core'     # the transport half alone
 
 ## Use
 
+Swift reaches this as a module — no bridging header, which is an app's own
+business and never a library's. SPM generates the module map; CocoaPods writes
+one under `use_frameworks!`. The names Swift sees are the ones the Android and
+.NET SDKs use.
+
+```swift
+import AppAtlasSDK
+
+Atlas.start(withKey: "sdk_…")
+
+AtlasLinks.setListener { link in
+    // link.payload / link.path / link.deferred / link.match
+    // link.channel / link.campaign / link.shortId / link.clickedAt
+}
+
+// The delegate's link entry points.
+AtlasLinks.handle(url)                          // openURL:
+AtlasLinks.handle(userActivity: activity)       // continueUserActivity:
+AtlasLinks.checkPasteboardOnFirstLaunch()
+```
+
+Objective-C, where the `ATL` prefix stands in for the namespace the language
+does not have:
+
 ```objc
 // application:didFinishLaunchingWithOptions:
 [Atlas startWithKey:@"sdk_…"];
@@ -39,7 +63,7 @@ pod 'AppAtlasSDK/Core'     # the transport half alone
 }
 
 - (BOOL)application:(UIApplication *)app openURL:(NSURL *)url options:(NSDictionary *)options {
-    return [ATLLinks handleOpenURL:url];
+    return [ATLLinks handleURL:url];
 }
 ```
 
@@ -86,7 +110,8 @@ Sources/AppAtlasSDK/Links     the links module; UIKit is touched in one file
 ```sh
 sh check-core.sh                             # runs the Foundation half on macOS,
                                              # syntax-checks the UIKit binding for iOS 12,
-                                             # and compares the golden bytes
+                                             # checks the Swift surface, and compares
+                                             # the golden bytes
 ATLAS_SERVER=../app-atlas sh check-core.sh   # and the server's own parser
 swift build                                  # the SPM manifest
 ```

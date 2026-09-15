@@ -5,6 +5,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// What the one listener receives, direct and deferred alike: the link's own
 /// payload plus how it arrived. One shape for both cases — two code paths
 /// for one concept is the integration bug factory.
+NS_SWIFT_NAME(AtlasLink)
 @interface ATLLink : NSObject
 
 /// The link's custom key-values, exactly as saved on the link.
@@ -33,6 +34,6 @@ NS_ASSUME_NONNULL_BEGIN
 
 @end
 
-typedef void (^ATLLinkListener)(ATLLink *link);
+typedef void (^ATLLinkListener)(ATLLink *link) NS_SWIFT_NAME(AtlasLinkListener);
 
 NS_ASSUME_NONNULL_END

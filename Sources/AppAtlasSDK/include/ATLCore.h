@@ -6,6 +6,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// one-item envelope, and a single serial worker drains the queue — at start,
 /// and after every offer. Modules hand items in; they never touch the network
 /// themselves.
+NS_SWIFT_NAME(AtlasCore)
 @interface ATLCore : NSObject
 
 @property (nonatomic, readonly) NSString *installId;

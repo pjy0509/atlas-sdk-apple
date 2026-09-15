@@ -184,13 +184,13 @@ static void checkLinksFlow(NSString *baseUrl, NSString *outDir) {
     // A direct open: the visit URL routes to the listener and lands an open
     // envelope on the queue for the drain.
     received = nil;
-    require([ATLLinks handleOpenURL:[NSURL URLWithString:@"https://appatlas.dev/aB3kM9p?ch=email"]],
+    require([ATLLinks handleURL:[NSURL URLWithString:@"https://appatlas.dev/aB3kM9p?ch=email"]],
             @"a visit URL must be handled");
     spinUntil(^BOOL { return received != nil; }, 5.0);
     require(received != nil && !received.deferred, @"the direct link must arrive undeferred");
     require([received.shortId isEqualToString:@"aB3kM9p"], @"shortId lost");
 
-    require(![ATLLinks handleOpenURL:[NSURL URLWithString:@"https://appatlas.dev/settings"]],
+    require(![ATLLinks handleURL:[NSURL URLWithString:@"https://appatlas.dev/settings"]],
             @"a stranger URL must be refused");
 
     [[Atlas core] awaitIdle];
