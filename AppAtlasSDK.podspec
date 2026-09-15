@@ -20,16 +20,17 @@ Pod::Spec.new do |s|
 
   s.requires_arc     = true
   s.frameworks       = 'Foundation'
-  s.public_header_files = 'Sources/AppAtlasSDK/include/*.h'
 
   s.default_subspec  = 'Links'
 
   s.subspec 'Core' do |core|
     core.source_files = 'Sources/AppAtlasSDK/include/{Atlas,ATLCore}.h', 'Sources/AppAtlasSDK/Core/*.{h,m}'
+    core.public_header_files = 'Sources/AppAtlasSDK/include/{Atlas,ATLCore}.h'
   end
 
   s.subspec 'Links' do |links|
     links.dependency 'AppAtlasSDK/Core'
     links.source_files = 'Sources/AppAtlasSDK/include/ATLLink*.h', 'Sources/AppAtlasSDK/Links/*.{h,m}'
+    links.public_header_files = 'Sources/AppAtlasSDK/include/ATLLink*.h'
   end
 end

@@ -39,9 +39,15 @@ static ATLCore *ATLSharedCore = nil;
     // ship is simply absent (the Android binding's reflective boot, in
     // NSClassFromString form).
     Class links = NSClassFromString(@"ATLLinks");
+    SEL boot = NSSelectorFromString(@"boot");
 
-    if (links != nil && [links respondsToSelector:@selector(boot)]) {
-        [links performSelector:@selector(boot)];
+    if (links != nil && [links respondsToSelector:boot]) {
+        // Suppressed because the selector is resolved by name on purpose: the
+        // class is absent unless the app shipped the module.
+        #pragma clang diagnostic push
+        #pragma clang diagnostic ignored "-Warc-performSelector-leaks"
+        [links performSelector:boot];
+        #pragma clang diagnostic pop
     }
 }
 
