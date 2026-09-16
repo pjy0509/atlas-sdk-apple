@@ -1,5 +1,7 @@
 # Atlas SDK for Apple platforms
 
+[한국어](README.ko.md) · [中文](README.zh.md)
+
 The client half of [App Atlas](https://appatlas.dev) on iOS and macOS.
 Objective-C, Foundation-only core, no dependencies. **iOS 12 / macOS 10.13**,
 distributed as source so a lower deployment target stays buildable.
@@ -19,6 +21,7 @@ pod 'AppAtlasSDK'          # Links (pulls Core)
 pod 'AppAtlasSDK/Core'     # the transport half alone
 ```
 
+<!-- guide:start -->
 ## Use
 
 Swift reaches this as a module — no bridging header, which is an app's own
@@ -96,6 +99,8 @@ identifier — not the IDFA, not the vendor id, nothing that survives an
 uninstall. No ATT prompt is required by anything here. Device context (OS
 version, model, locale, timezone, app version) is the standard crash-report set
 and identifies no one.
+
+<!-- guide:end -->
 
 ## Layout
 
