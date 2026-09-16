@@ -11,7 +11,7 @@ Pod::Spec.new do |s|
   s.homepage         = 'https://appatlas.dev'
   s.license          = { :type => 'MIT', :file => 'LICENSE' }
   s.author           = { 'Park Jungyoung' => 'qkrwnss0509@gmail.com' }
-  s.source           = { :git => 'https://github.com/pjy0509/atlas-sdk-apple.git', :tag => s.version.to_s }
+  s.source           = { :git => 'https://github.com/pjy0509/atlas-sdk-apple.git', :tag => "v#{s.version}" }
 
   # Source distribution is the point: a binary XCFramework cannot be built
   # for a deployment target current Xcode refuses to link.
