@@ -8,26 +8,39 @@ distributed as source so a lower deployment target stays buildable.
 
 ## Install
 
-Swift Package Manager:
+<!-- tabs:start -->
+#### Xcode
+
+```
+File > Add Package Dependencies…
+https://github.com/pjy0509/atlas-sdk-apple.git
+```
+
+#### Package.swift
 
 ```swift
 .package(url: "https://github.com/pjy0509/atlas-sdk-apple.git", from: "0.1.0")
 ```
 
-CocoaPods:
+#### Podfile
 
 ```ruby
 pod 'AppAtlasSDK'          # Links (pulls Core)
 pod 'AppAtlasSDK/Core'     # the transport half alone
 ```
+<!-- tabs:end -->
 
 <!-- guide:start -->
 ## Use
 
 Swift reaches this as a module — no bridging header, which is an app's own
 business and never a library's. SPM generates the module map; CocoaPods writes
-one under `use_frameworks!`. The names Swift sees are the ones the Android and
+one under `use_frameworks!`. In Objective-C the `ATL` prefix stands in for the
+namespace the language does not have. The names are the ones the Android and
 .NET SDKs use.
+
+<!-- tabs:start -->
+#### Swift
 
 ```swift
 import AppAtlasSDK
@@ -38,15 +51,15 @@ AtlasLinks.setListener { link in
     // link.payload / link.path / link.deferred / link.match
     // link.channel / link.campaign / link.shortId / link.clickedAt
 }
+```
 
+```swift
 // The delegate's link entry points.
 AtlasLinks.handle(url)                          // openURL:
 AtlasLinks.handle(userActivity: activity)       // continueUserActivity:
-AtlasLinks.checkPasteboardOnFirstLaunch()
 ```
 
-Objective-C, where the `ATL` prefix stands in for the namespace the language
-does not have:
+#### Objective-C
 
 ```objc
 // application:didFinishLaunchingWithOptions:
@@ -69,6 +82,7 @@ does not have:
     return [ATLLinks handleURL:url];
 }
 ```
+<!-- tabs:end -->
 
 A link that arrives before the listener is registered is queued and replayed,
 so a cold-start tap is never lost.
@@ -78,9 +92,19 @@ so a cold-start tap is never lost.
 Apple offers no install referrer, so the visit page hands the link over through
 the clipboard — with the visitor's own tap — and the app claims it once:
 
+<!-- tabs:start -->
+#### Swift
+
+```swift
+AtlasLinks.checkPasteboardOnFirstLaunch()
+```
+
+#### Objective-C
+
 ```objc
 [ATLLinks checkPasteboardOnFirstLaunch];
 ```
+<!-- tabs:end -->
 
 It is a call you make, not a default, because the iOS 16 paste banner is your
 app's first impression to own. Before reading, the SDK checks that this is the
@@ -89,7 +113,7 @@ plausibly present (`hasURLs`, which shows no prompt). It reads only a handoff
 of this service's own shape, and clears it afterwards so a second app cannot
 claim the same link.
 
-`[ATLLinks firstReferringLink]` returns the link that produced the install,
+`AtlasLinks.firstReferringLink()` returns the link that produced the install,
 forever.
 
 ## Privacy
@@ -99,7 +123,6 @@ identifier — not the IDFA, not the vendor id, nothing that survives an
 uninstall. No ATT prompt is required by anything here. Device context (OS
 version, model, locale, timezone, app version) is the standard crash-report set
 and identifies no one.
-
 <!-- guide:end -->
 
 ## Layout

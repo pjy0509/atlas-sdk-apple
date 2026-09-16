@@ -8,18 +8,27 @@ Objective-C, Foundation만 쓰는 코어, 의존성 없음. **iOS 12 / macOS 10.
 
 ## 설치
 
-Swift Package Manager:
+<!-- tabs:start -->
+#### Xcode
+
+```
+File > Add Package Dependencies…
+https://github.com/pjy0509/atlas-sdk-apple.git
+```
+
+#### Package.swift
 
 ```swift
 .package(url: "https://github.com/pjy0509/atlas-sdk-apple.git", from: "0.1.0")
 ```
 
-CocoaPods:
+#### Podfile
 
 ```ruby
 pod 'AppAtlasSDK'          # Links (Core를 함께 가져옵니다)
 pod 'AppAtlasSDK/Core'     # 전송 반쪽만
 ```
+<!-- tabs:end -->
 
 <!-- guide:start -->
 ## 사용
@@ -27,7 +36,11 @@ pod 'AppAtlasSDK/Core'     # 전송 반쪽만
 Swift에서는 모듈로 바로 접근합니다. 브리징 헤더는 필요 없습니다.
 브리징 헤더는 앱의 소관이지 라이브러리가 강요할 것이 아니기 때문입니다.
 SPM은 모듈맵을 생성하고, CocoaPods는 `use_frameworks!` 아래에서 하나를
-써 줍니다. Swift가 보는 이름은 Android·.NET SDK와 같은 이름입니다.
+써 줍니다. Objective-C에서는 언어에 없는 네임스페이스를 `ATL` 접두사가
+대신합니다. 이름은 Android·.NET SDK와 같은 이름입니다.
+
+<!-- tabs:start -->
+#### Swift
 
 ```swift
 import AppAtlasSDK
@@ -38,14 +51,15 @@ AtlasLinks.setListener { link in
     // link.payload / link.path / link.deferred / link.match
     // link.channel / link.campaign / link.shortId / link.clickedAt
 }
+```
 
+```swift
 // 델리게이트의 링크 진입점.
 AtlasLinks.handle(url)                          // openURL:
 AtlasLinks.handle(userActivity: activity)       // continueUserActivity:
-AtlasLinks.checkPasteboardOnFirstLaunch()
 ```
 
-Objective-C에서는 언어에 없는 네임스페이스를 `ATL` 접두사가 대신합니다.
+#### Objective-C
 
 ```objc
 // application:didFinishLaunchingWithOptions:
@@ -68,6 +82,7 @@ Objective-C에서는 언어에 없는 네임스페이스를 `ATL` 접두사가 �
     return [ATLLinks handleURL:url];
 }
 ```
+<!-- tabs:end -->
 
 리스너가 등록되기 전에 도착한 링크는 보관했다가 다시 전달하므로,
 콜드 스타트의 탭도 잃지 않습니다.
@@ -77,9 +92,19 @@ Objective-C에서는 언어에 없는 네임스페이스를 `ATL` 접두사가 �
 Apple에는 install referrer가 없습니다. 그래서 방문 페이지가 방문자의 탭으로
 링크를 클립보드에 넘기고, 앱이 한 번 교환합니다.
 
+<!-- tabs:start -->
+#### Swift
+
+```swift
+AtlasLinks.checkPasteboardOnFirstLaunch()
+```
+
+#### Objective-C
+
 ```objc
 [ATLLinks checkPasteboardOnFirstLaunch];
 ```
+<!-- tabs:end -->
 
 기본 동작이 아니라 앱이 직접 부르는 호출입니다. iOS 16의 붙여넣기 배너는
 앱의 첫인상이고, 그것은 앱이 스스로 결정할 몫이기 때문입니다. 읽기 전에
@@ -88,7 +113,7 @@ URL이 있을 법한지(`hasURLs`, 프롬프트를 띄우지 않습니다)를 �
 이 서비스의 형태를 한 핸드오프만 읽고, 읽은 뒤에는 지워서 두 번째 앱이
 같은 링크를 가져가지 못하게 합니다.
 
-`[ATLLinks firstReferringLink]`는 설치를 만든 링크를 언제까지나 돌려줍니다.
+`AtlasLinks.firstReferringLink()`는 설치를 만든 링크를 언제까지나 돌려줍니다.
 
 ## 프라이버시
 
