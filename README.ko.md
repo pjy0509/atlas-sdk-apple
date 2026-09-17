@@ -47,20 +47,34 @@ SPM은 모듈맵을 생성하고, CocoaPods는 `use_frameworks!` 아래에서 �
 #### Swift
 
 ```swift
+// AppDelegate.swift
 import AppAtlasSDK
 
-Atlas.start(withKey: "sdk_…")
+func application(_ application: UIApplication,
+                 didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+    Atlas.start(withKey: "sdk_…")
 
-AtlasLinks.setListener { link in
-    // link.payload / link.path / link.deferred / link.match
-    // link.channel / link.campaign / link.shortId / link.clickedAt
+    AtlasLinks.setListener { link in
+        // 직접 열림과 디퍼드 링크가 같은 자리로 옵니다.
+        // link.deferred: 설치를 건너온 링크면 true.
+        // link.match: referrer / clipboard / campaign_id / relink.
+        // link.path와 link.payload로 화면을 이동합니다. 예:
+        // if let path = link.path { openScreen(path, link.payload) }
+    }
+
+    return true
 }
-```
 
-```swift
 // 델리게이트의 링크 진입점.
-AtlasLinks.handle(url)                          // openURL:
-AtlasLinks.handle(userActivity: activity)       // continueUserActivity:
+func application(_ app: UIApplication, open url: URL,
+                 options: [UIApplication.OpenURLOptionsKey: Any] = [:]) -> Bool {
+    return AtlasLinks.handle(url)
+}
+
+func application(_ application: UIApplication, continue userActivity: NSUserActivity,
+                 restorationHandler: @escaping ([UIUserActivityRestoring]?) -> Void) -> Bool {
+    return AtlasLinks.handle(userActivity: userActivity)
+}
 ```
 
 #### Objective-C

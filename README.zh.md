@@ -46,20 +46,34 @@ Swift 直接以模块访问，无需桥接头文件。桥接头文件是应用�
 #### Swift
 
 ```swift
+// AppDelegate.swift
 import AppAtlasSDK
 
-Atlas.start(withKey: "sdk_…")
+func application(_ application: UIApplication,
+                 didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+    Atlas.start(withKey: "sdk_…")
 
-AtlasLinks.setListener { link in
-    // link.payload / link.path / link.deferred / link.match
-    // link.channel / link.campaign / link.shortId / link.clickedAt
+    AtlasLinks.setListener { link in
+        // 直接打开与延迟链接都到达这里。
+        // link.deferred: 跨越了安装的链接为 true。
+        // link.match: referrer / clipboard / campaign_id / relink。
+        // 用 link.path 与 link.payload 做页面跳转，例如：
+        // if let path = link.path { openScreen(path, link.payload) }
+    }
+
+    return true
 }
-```
 
-```swift
 // 代理中的链接入口。
-AtlasLinks.handle(url)                          // openURL:
-AtlasLinks.handle(userActivity: activity)       // continueUserActivity:
+func application(_ app: UIApplication, open url: URL,
+                 options: [UIApplication.OpenURLOptionsKey: Any] = [:]) -> Bool {
+    return AtlasLinks.handle(url)
+}
+
+func application(_ application: UIApplication, continue userActivity: NSUserActivity,
+                 restorationHandler: @escaping ([UIUserActivityRestoring]?) -> Void) -> Bool {
+    return AtlasLinks.handle(userActivity: userActivity)
+}
 ```
 
 #### Objective-C

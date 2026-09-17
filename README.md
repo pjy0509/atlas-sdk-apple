@@ -47,20 +47,34 @@ namespace the language does not have. The names are the ones the Android and
 #### Swift
 
 ```swift
+// AppDelegate.swift
 import AppAtlasSDK
 
-Atlas.start(withKey: "sdk_…")
+func application(_ application: UIApplication,
+                 didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+    Atlas.start(withKey: "sdk_…")
 
-AtlasLinks.setListener { link in
-    // link.payload / link.path / link.deferred / link.match
-    // link.channel / link.campaign / link.shortId / link.clickedAt
+    AtlasLinks.setListener { link in
+        // Direct opens and the deferred link arrive here alike.
+        // link.deferred: true when the link crossed the install.
+        // link.match: referrer / clipboard / campaign_id / relink.
+        // Route with link.path and link.payload, e.g.:
+        // if let path = link.path { openScreen(path, link.payload) }
+    }
+
+    return true
 }
-```
 
-```swift
 // The delegate's link entry points.
-AtlasLinks.handle(url)                          // openURL:
-AtlasLinks.handle(userActivity: activity)       // continueUserActivity:
+func application(_ app: UIApplication, open url: URL,
+                 options: [UIApplication.OpenURLOptionsKey: Any] = [:]) -> Bool {
+    return AtlasLinks.handle(url)
+}
+
+func application(_ application: UIApplication, continue userActivity: NSUserActivity,
+                 restorationHandler: @escaping ([UIUserActivityRestoring]?) -> Void) -> Bool {
+    return AtlasLinks.handle(userActivity: userActivity)
+}
 ```
 
 #### Objective-C
