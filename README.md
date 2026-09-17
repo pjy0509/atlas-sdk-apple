@@ -46,7 +46,7 @@ namespace the language does not have. The names are the ones the Android and
 <!-- tabs:start -->
 #### Swift
 
-```swift
+```swift title="AppDelegate.swift"
 // AppDelegate.swift
 import AppAtlasSDK
 
@@ -79,7 +79,7 @@ func application(_ application: UIApplication, continue userActivity: NSUserActi
 
 #### Objective-C
 
-```objc
+```objc title="AppDelegate.m"
 // application:didFinishLaunchingWithOptions:
 [Atlas startWithKey:@"sdk_…"];
 
@@ -89,7 +89,7 @@ func application(_ application: UIApplication, continue userActivity: NSUserActi
 }];
 ```
 
-```objc
+```objc title="AppDelegate.m"
 // The delegate's link entry points.
 - (BOOL)application:(UIApplication *)app continueUserActivity:(NSUserActivity *)activity
  restorationHandler:(void (^)(NSArray<id<UIUserActivityRestoring>> *))restorationHandler {

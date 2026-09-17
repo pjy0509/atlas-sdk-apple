@@ -46,7 +46,7 @@ SPM은 모듈맵을 생성하고, CocoaPods는 `use_frameworks!` 아래에서 �
 <!-- tabs:start -->
 #### Swift
 
-```swift
+```swift title="AppDelegate.swift"
 // AppDelegate.swift
 import AppAtlasSDK
 
@@ -79,7 +79,7 @@ func application(_ application: UIApplication, continue userActivity: NSUserActi
 
 #### Objective-C
 
-```objc
+```objc title="AppDelegate.m"
 // application:didFinishLaunchingWithOptions:
 [Atlas startWithKey:@"sdk_…"];
 
@@ -89,7 +89,7 @@ func application(_ application: UIApplication, continue userActivity: NSUserActi
 }];
 ```
 
-```objc
+```objc title="AppDelegate.m"
 // 델리게이트의 링크 진입점.
 - (BOOL)application:(UIApplication *)app continueUserActivity:(NSUserActivity *)activity
  restorationHandler:(void (^)(NSArray<id<UIUserActivityRestoring>> *))restorationHandler {

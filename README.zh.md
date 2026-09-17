@@ -45,7 +45,7 @@ Swift 直接以模块访问，无需桥接头文件。桥接头文件是应用�
 <!-- tabs:start -->
 #### Swift
 
-```swift
+```swift title="AppDelegate.swift"
 // AppDelegate.swift
 import AppAtlasSDK
 
@@ -78,7 +78,7 @@ func application(_ application: UIApplication, continue userActivity: NSUserActi
 
 #### Objective-C
 
-```objc
+```objc title="AppDelegate.m"
 // application:didFinishLaunchingWithOptions:
 [Atlas startWithKey:@"sdk_…"];
 
@@ -88,7 +88,7 @@ func application(_ application: UIApplication, continue userActivity: NSUserActi
 }];
 ```
 
-```objc
+```objc title="AppDelegate.m"
 // 代理中的链接入口。
 - (BOOL)application:(UIApplication *)app continueUserActivity:(NSUserActivity *)activity
  restorationHandler:(void (^)(NSArray<id<UIUserActivityRestoring>> *))restorationHandler {
