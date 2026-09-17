@@ -180,12 +180,17 @@ func application(_ application: UIApplication,
 ```
 <!-- tabs:end -->
 
-It is a call you make, not a default, because the iOS 16 paste banner is your
-app's first impression to own. Before reading, the SDK checks that this is the
-install's own first run, that nothing has been claimed yet, and that a URL is
-plausibly present (`hasURLs`, which shows no prompt). It reads only a handoff
-of this service's own shape, and clears it afterwards so a second app cannot
-claim the same link.
+The SDK shows no UI of its own. The read itself is what the OS answers to:
+on iOS 16 and later the system raises an allow-or-deny paste alert, iOS 14
+and 15 show a banner that cannot be declined, and earlier versions show
+nothing. That moment lands on your app's first launch, which is why the call
+is yours to make. Before reading, the SDK checks that this is the install's
+own first run, that nothing has been claimed yet, and that a URL is plausibly
+present (`hasURLs`, which raises no alert), so the alert can appear at most
+once per install. Content that is not this service's handoff is left
+untouched and uncleared; the handoff alone is claimed and then cleared, so a
+second app cannot take the same link. A decline loses only the deferred link;
+the app keeps working.
 
 `AtlasLinks.firstReferringLink()` returns the link that produced the install,
 forever.
