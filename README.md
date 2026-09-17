@@ -77,13 +77,20 @@ func application(_ application: UIApplication,
 #### Swift
 
 ```swift title="AppDelegate.swift"
-// AppDelegate.swift: right after Atlas.start.
-AtlasLinks.setListener { link in
-    // Direct opens and the deferred link arrive here alike.
-    // link.deferred: true when the link crossed the install.
-    // link.match: referrer / clipboard / campaign_id / relink.
-    // Route with link.path and link.payload, e.g.:
-    // if let path = link.path { openScreen(path, link.payload) }
+// AppDelegate.swift
+func application(_ application: UIApplication,
+                 didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+    Atlas.start(withKey: "sdk_…")
+
+    AtlasLinks.setListener { link in
+        // Direct opens and the deferred link arrive here alike.
+        // link.deferred: true when the link crossed the install.
+        // link.match: referrer / clipboard / campaign_id / relink.
+        // Route with link.path and link.payload, e.g.:
+        // if let path = link.path { openScreen(path, link.payload) }
+    }
+
+    return true
 }
 ```
 
@@ -103,14 +110,21 @@ func application(_ application: UIApplication, continue userActivity: NSUserActi
 #### Objective-C
 
 ```objc title="AppDelegate.m"
-// AppDelegate.m: right after startWithKey:.
-[ATLLinks setListener:^(ATLLink *link) {
-    // Direct opens and the deferred link arrive here alike.
-    // link.deferred: true when the link crossed the install.
-    // link.match: referrer / clipboard / campaign_id / relink.
-    // Route with link.path and link.payload, e.g.:
-    // if (link.path != nil) { [self openScreen:link.path payload:link.payload]; }
-}];
+// AppDelegate.m
+- (BOOL)application:(UIApplication *)application
+    didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
+    [Atlas startWithKey:@"sdk_…"];
+
+    [ATLLinks setListener:^(ATLLink *link) {
+        // Direct opens and the deferred link arrive here alike.
+        // link.deferred: true when the link crossed the install.
+        // link.match: referrer / clipboard / campaign_id / relink.
+        // Route with link.path and link.payload, e.g.:
+        // if (link.path != nil) { [self openScreen:link.path payload:link.payload]; }
+    }];
+
+    return YES;
+}
 ```
 
 ```objc title="AppDelegate.m"
@@ -137,14 +151,32 @@ the clipboard — with the visitor's own tap — and the app claims it once:
 <!-- tabs:start -->
 #### Swift
 
-```swift
-AtlasLinks.checkPasteboardOnFirstLaunch()
+```swift title="AppDelegate.swift"
+// AppDelegate.swift
+func application(_ application: UIApplication,
+                 didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+    Atlas.start(withKey: "sdk_…")
+    AtlasLinks.setListener { link in /* … */ }
+
+    AtlasLinks.checkPasteboardOnFirstLaunch()
+
+    return true
+}
 ```
 
 #### Objective-C
 
-```objc
-[ATLLinks checkPasteboardOnFirstLaunch];
+```objc title="AppDelegate.m"
+// AppDelegate.m
+- (BOOL)application:(UIApplication *)application
+    didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
+    [Atlas startWithKey:@"sdk_…"];
+    [ATLLinks setListener:^(ATLLink *link) { /* … */ }];
+
+    [ATLLinks checkPasteboardOnFirstLaunch];
+
+    return YES;
+}
 ```
 <!-- tabs:end -->
 

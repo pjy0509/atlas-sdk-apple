@@ -77,13 +77,20 @@ func application(_ application: UIApplication,
 #### Swift
 
 ```swift title="AppDelegate.swift"
-// AppDelegate.swift: Atlas.start 바로 다음.
-AtlasLinks.setListener { link in
-    // 직접 열림과 디퍼드 링크가 같은 자리로 옵니다.
-    // link.deferred: 설치를 건너온 링크면 true.
-    // link.match: referrer / clipboard / campaign_id / relink.
-    // link.path와 link.payload로 화면을 이동합니다. 예:
-    // if let path = link.path { openScreen(path, link.payload) }
+// AppDelegate.swift
+func application(_ application: UIApplication,
+                 didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+    Atlas.start(withKey: "sdk_…")
+
+    AtlasLinks.setListener { link in
+        // 직접 열림과 디퍼드 링크가 같은 자리로 옵니다.
+        // link.deferred: 설치를 건너온 링크면 true.
+        // link.match: referrer / clipboard / campaign_id / relink.
+        // link.path와 link.payload로 화면을 이동합니다. 예:
+        // if let path = link.path { openScreen(path, link.payload) }
+    }
+
+    return true
 }
 ```
 
@@ -103,14 +110,21 @@ func application(_ application: UIApplication, continue userActivity: NSUserActi
 #### Objective-C
 
 ```objc title="AppDelegate.m"
-// AppDelegate.m: startWithKey: 바로 다음.
-[ATLLinks setListener:^(ATLLink *link) {
-    // 직접 열림과 디퍼드 링크가 같은 자리로 옵니다.
-    // link.deferred: 설치를 건너온 링크면 true.
-    // link.match: referrer / clipboard / campaign_id / relink.
-    // link.path와 link.payload로 화면을 이동합니다. 예:
-    // if (link.path != nil) { [self openScreen:link.path payload:link.payload]; }
-}];
+// AppDelegate.m
+- (BOOL)application:(UIApplication *)application
+    didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
+    [Atlas startWithKey:@"sdk_…"];
+
+    [ATLLinks setListener:^(ATLLink *link) {
+        // 직접 열림과 디퍼드 링크가 같은 자리로 옵니다.
+        // link.deferred: 설치를 건너온 링크면 true.
+        // link.match: referrer / clipboard / campaign_id / relink.
+        // link.path와 link.payload로 화면을 이동합니다. 예:
+        // if (link.path != nil) { [self openScreen:link.path payload:link.payload]; }
+    }];
+
+    return YES;
+}
 ```
 
 ```objc title="AppDelegate.m"
@@ -137,14 +151,32 @@ Apple에는 install referrer가 없습니다. 그래서 방문 페이지가 방�
 <!-- tabs:start -->
 #### Swift
 
-```swift
-AtlasLinks.checkPasteboardOnFirstLaunch()
+```swift title="AppDelegate.swift"
+// AppDelegate.swift
+func application(_ application: UIApplication,
+                 didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+    Atlas.start(withKey: "sdk_…")
+    AtlasLinks.setListener { link in /* … */ }
+
+    AtlasLinks.checkPasteboardOnFirstLaunch()
+
+    return true
+}
 ```
 
 #### Objective-C
 
-```objc
-[ATLLinks checkPasteboardOnFirstLaunch];
+```objc title="AppDelegate.m"
+// AppDelegate.m
+- (BOOL)application:(UIApplication *)application
+    didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
+    [Atlas startWithKey:@"sdk_…"];
+    [ATLLinks setListener:^(ATLLink *link) { /* … */ }];
+
+    [ATLLinks checkPasteboardOnFirstLaunch];
+
+    return YES;
+}
 ```
 <!-- tabs:end -->
 

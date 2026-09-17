@@ -76,13 +76,20 @@ func application(_ application: UIApplication,
 #### Swift
 
 ```swift title="AppDelegate.swift"
-// AppDelegate.swift: Atlas.start 之后。
-AtlasLinks.setListener { link in
-    // 直接打开与延迟链接都到达这里。
-    // link.deferred: 跨越了安装的链接为 true。
-    // link.match: referrer / clipboard / campaign_id / relink。
-    // 用 link.path 与 link.payload 做页面跳转，例如：
-    // if let path = link.path { openScreen(path, link.payload) }
+// AppDelegate.swift
+func application(_ application: UIApplication,
+                 didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+    Atlas.start(withKey: "sdk_…")
+
+    AtlasLinks.setListener { link in
+        // 直接打开与延迟链接都到达这里。
+        // link.deferred: 跨越了安装的链接为 true。
+        // link.match: referrer / clipboard / campaign_id / relink。
+        // 用 link.path 与 link.payload 做页面跳转，例如：
+        // if let path = link.path { openScreen(path, link.payload) }
+    }
+
+    return true
 }
 ```
 
@@ -102,14 +109,21 @@ func application(_ application: UIApplication, continue userActivity: NSUserActi
 #### Objective-C
 
 ```objc title="AppDelegate.m"
-// AppDelegate.m: startWithKey: 之后。
-[ATLLinks setListener:^(ATLLink *link) {
-    // 直接打开与延迟链接都到达这里。
-    // link.deferred: 跨越了安装的链接为 true。
-    // link.match: referrer / clipboard / campaign_id / relink。
-    // 用 link.path 与 link.payload 做页面跳转，例如：
-    // if (link.path != nil) { [self openScreen:link.path payload:link.payload]; }
-}];
+// AppDelegate.m
+- (BOOL)application:(UIApplication *)application
+    didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
+    [Atlas startWithKey:@"sdk_…"];
+
+    [ATLLinks setListener:^(ATLLink *link) {
+        // 直接打开与延迟链接都到达这里。
+        // link.deferred: 跨越了安装的链接为 true。
+        // link.match: referrer / clipboard / campaign_id / relink。
+        // 用 link.path 与 link.payload 做页面跳转，例如：
+        // if (link.path != nil) { [self openScreen:link.path payload:link.payload]; }
+    }];
+
+    return YES;
+}
 ```
 
 ```objc title="AppDelegate.m"
@@ -135,14 +149,32 @@ Apple 没有 install referrer，因此访问页面借访客自己的点击把链
 <!-- tabs:start -->
 #### Swift
 
-```swift
-AtlasLinks.checkPasteboardOnFirstLaunch()
+```swift title="AppDelegate.swift"
+// AppDelegate.swift
+func application(_ application: UIApplication,
+                 didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+    Atlas.start(withKey: "sdk_…")
+    AtlasLinks.setListener { link in /* … */ }
+
+    AtlasLinks.checkPasteboardOnFirstLaunch()
+
+    return true
+}
 ```
 
 #### Objective-C
 
-```objc
-[ATLLinks checkPasteboardOnFirstLaunch];
+```objc title="AppDelegate.m"
+// AppDelegate.m
+- (BOOL)application:(UIApplication *)application
+    didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
+    [Atlas startWithKey:@"sdk_…"];
+    [ATLLinks setListener:^(ATLLink *link) { /* … */ }];
+
+    [ATLLinks checkPasteboardOnFirstLaunch];
+
+    return YES;
+}
 ```
 <!-- tabs:end -->
 
