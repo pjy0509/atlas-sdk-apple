@@ -35,7 +35,7 @@ pod 'AppAtlasSDK/Core'     # the transport half alone
 <!-- tabs:end -->
 
 <!-- guide:start -->
-## Use
+## Start
 
 Swift reaches this as a module — no bridging header, which is an app's own
 business and never a library's. SPM generates the module map; CocoaPods writes
@@ -53,18 +53,41 @@ import AppAtlasSDK
 func application(_ application: UIApplication,
                  didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
     Atlas.start(withKey: "sdk_…")
-
-    AtlasLinks.setListener { link in
-        // Direct opens and the deferred link arrive here alike.
-        // link.deferred: true when the link crossed the install.
-        // link.match: referrer / clipboard / campaign_id / relink.
-        // Route with link.path and link.payload, e.g.:
-        // if let path = link.path { openScreen(path, link.payload) }
-    }
-
+    // Modules (Links, later Push and Crash) wire in from here.
     return true
 }
+```
 
+#### Objective-C
+
+```objc title="AppDelegate.m"
+// AppDelegate.m
+- (BOOL)application:(UIApplication *)application
+    didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
+    [Atlas startWithKey:@"sdk_…"];
+    // Modules (Links, later Push and Crash) wire in from here.
+    return YES;
+}
+```
+<!-- tabs:end -->
+
+## Links
+
+<!-- tabs:start -->
+#### Swift
+
+```swift title="AppDelegate.swift"
+// AppDelegate.swift: right after Atlas.start.
+AtlasLinks.setListener { link in
+    // Direct opens and the deferred link arrive here alike.
+    // link.deferred: true when the link crossed the install.
+    // link.match: referrer / clipboard / campaign_id / relink.
+    // Route with link.path and link.payload, e.g.:
+    // if let path = link.path { openScreen(path, link.payload) }
+}
+```
+
+```swift title="AppDelegate.swift"
 // The delegate's link entry points.
 func application(_ app: UIApplication, open url: URL,
                  options: [UIApplication.OpenURLOptionsKey: Any] = [:]) -> Bool {
@@ -80,12 +103,13 @@ func application(_ application: UIApplication, continue userActivity: NSUserActi
 #### Objective-C
 
 ```objc title="AppDelegate.m"
-// application:didFinishLaunchingWithOptions:
-[Atlas startWithKey:@"sdk_…"];
-
+// AppDelegate.m: right after startWithKey:.
 [ATLLinks setListener:^(ATLLink *link) {
-    // link.payload / link.path / link.deferred / link.match
-    // link.channel / link.campaign / link.shortId
+    // Direct opens and the deferred link arrive here alike.
+    // link.deferred: true when the link crossed the install.
+    // link.match: referrer / clipboard / campaign_id / relink.
+    // Route with link.path and link.payload, e.g.:
+    // if (link.path != nil) { [self openScreen:link.path payload:link.payload]; }
 }];
 ```
 

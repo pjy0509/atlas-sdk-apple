@@ -35,7 +35,7 @@ pod 'AppAtlasSDK/Core'     # 仅传输那一半
 <!-- tabs:end -->
 
 <!-- guide:start -->
-## 使用
+## 启动
 
 Swift 直接以模块访问，无需桥接头文件。桥接头文件是应用自己的事，
 库不应替它做主。SPM 会生成模块映射；CocoaPods 在 `use_frameworks!`
@@ -52,18 +52,41 @@ import AppAtlasSDK
 func application(_ application: UIApplication,
                  didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
     Atlas.start(withKey: "sdk_…")
-
-    AtlasLinks.setListener { link in
-        // 直接打开与延迟链接都到达这里。
-        // link.deferred: 跨越了安装的链接为 true。
-        // link.match: referrer / clipboard / campaign_id / relink。
-        // 用 link.path 与 link.payload 做页面跳转，例如：
-        // if let path = link.path { openScreen(path, link.payload) }
-    }
-
+    // 各模块（Links，之后的 Push 与 Crash）从这里开始接线。
     return true
 }
+```
 
+#### Objective-C
+
+```objc title="AppDelegate.m"
+// AppDelegate.m
+- (BOOL)application:(UIApplication *)application
+    didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
+    [Atlas startWithKey:@"sdk_…"];
+    // 各模块（Links，之后的 Push 与 Crash）从这里开始接线。
+    return YES;
+}
+```
+<!-- tabs:end -->
+
+## Links
+
+<!-- tabs:start -->
+#### Swift
+
+```swift title="AppDelegate.swift"
+// AppDelegate.swift: Atlas.start 之后。
+AtlasLinks.setListener { link in
+    // 直接打开与延迟链接都到达这里。
+    // link.deferred: 跨越了安装的链接为 true。
+    // link.match: referrer / clipboard / campaign_id / relink。
+    // 用 link.path 与 link.payload 做页面跳转，例如：
+    // if let path = link.path { openScreen(path, link.payload) }
+}
+```
+
+```swift title="AppDelegate.swift"
 // 代理中的链接入口。
 func application(_ app: UIApplication, open url: URL,
                  options: [UIApplication.OpenURLOptionsKey: Any] = [:]) -> Bool {
@@ -79,12 +102,13 @@ func application(_ application: UIApplication, continue userActivity: NSUserActi
 #### Objective-C
 
 ```objc title="AppDelegate.m"
-// application:didFinishLaunchingWithOptions:
-[Atlas startWithKey:@"sdk_…"];
-
+// AppDelegate.m: startWithKey: 之后。
 [ATLLinks setListener:^(ATLLink *link) {
-    // link.payload / link.path / link.deferred / link.match
-    // link.channel / link.campaign / link.shortId
+    // 直接打开与延迟链接都到达这里。
+    // link.deferred: 跨越了安装的链接为 true。
+    // link.match: referrer / clipboard / campaign_id / relink。
+    // 用 link.path 与 link.payload 做页面跳转，例如：
+    // if (link.path != nil) { [self openScreen:link.path payload:link.payload]; }
 }];
 ```
 

@@ -35,7 +35,7 @@ pod 'AppAtlasSDK/Core'     # 전송 반쪽만
 <!-- tabs:end -->
 
 <!-- guide:start -->
-## 사용
+## 시작
 
 Swift에서는 모듈로 바로 접근합니다. 브리징 헤더는 필요 없습니다.
 브리징 헤더는 앱의 소관이지 라이브러리가 강요할 것이 아니기 때문입니다.
@@ -53,18 +53,41 @@ import AppAtlasSDK
 func application(_ application: UIApplication,
                  didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
     Atlas.start(withKey: "sdk_…")
-
-    AtlasLinks.setListener { link in
-        // 직접 열림과 디퍼드 링크가 같은 자리로 옵니다.
-        // link.deferred: 설치를 건너온 링크면 true.
-        // link.match: referrer / clipboard / campaign_id / relink.
-        // link.path와 link.payload로 화면을 이동합니다. 예:
-        // if let path = link.path { openScreen(path, link.payload) }
-    }
-
+    // 모듈(Links, 이후 Push·Crash)은 여기서부터 배선합니다.
     return true
 }
+```
 
+#### Objective-C
+
+```objc title="AppDelegate.m"
+// AppDelegate.m
+- (BOOL)application:(UIApplication *)application
+    didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
+    [Atlas startWithKey:@"sdk_…"];
+    // 모듈(Links, 이후 Push·Crash)은 여기서부터 배선합니다.
+    return YES;
+}
+```
+<!-- tabs:end -->
+
+## Links
+
+<!-- tabs:start -->
+#### Swift
+
+```swift title="AppDelegate.swift"
+// AppDelegate.swift: Atlas.start 바로 다음.
+AtlasLinks.setListener { link in
+    // 직접 열림과 디퍼드 링크가 같은 자리로 옵니다.
+    // link.deferred: 설치를 건너온 링크면 true.
+    // link.match: referrer / clipboard / campaign_id / relink.
+    // link.path와 link.payload로 화면을 이동합니다. 예:
+    // if let path = link.path { openScreen(path, link.payload) }
+}
+```
+
+```swift title="AppDelegate.swift"
 // 델리게이트의 링크 진입점.
 func application(_ app: UIApplication, open url: URL,
                  options: [UIApplication.OpenURLOptionsKey: Any] = [:]) -> Bool {
@@ -80,12 +103,13 @@ func application(_ application: UIApplication, continue userActivity: NSUserActi
 #### Objective-C
 
 ```objc title="AppDelegate.m"
-// application:didFinishLaunchingWithOptions:
-[Atlas startWithKey:@"sdk_…"];
-
+// AppDelegate.m: startWithKey: 바로 다음.
 [ATLLinks setListener:^(ATLLink *link) {
-    // link.payload / link.path / link.deferred / link.match
-    // link.channel / link.campaign / link.shortId
+    // 직접 열림과 디퍼드 링크가 같은 자리로 옵니다.
+    // link.deferred: 설치를 건너온 링크면 true.
+    // link.match: referrer / clipboard / campaign_id / relink.
+    // link.path와 link.payload로 화면을 이동합니다. 예:
+    // if (link.path != nil) { [self openScreen:link.path payload:link.payload]; }
 }];
 ```
 
