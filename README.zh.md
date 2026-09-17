@@ -11,8 +11,12 @@ Objective-C，核心只依赖 Foundation，零依赖。支持 **iOS 12 / macOS 1
 <!-- tabs:start -->
 #### Xcode
 
+1. 打开项目，选择 File > Add Package Dependencies…
+2. 把仓库地址粘贴到搜索框。
+3. Dependency Rule 保持 Up to Next Major Version，从 0.1.0 起。
+4. 点击 Add Package，把 AppAtlasSDK 产品添加到应用目标。
+
 ```
-File > Add Package Dependencies…
 https://github.com/pjy0509/atlas-sdk-apple.git
 ```
 

@@ -11,8 +11,12 @@ distributed as source so a lower deployment target stays buildable.
 <!-- tabs:start -->
 #### Xcode
 
+1. Open the project and choose File > Add Package Dependencies…
+2. Paste the repository address into the search field.
+3. Keep the dependency rule Up to Next Major Version, from 0.1.0.
+4. Press Add Package, then add the AppAtlasSDK product to the app target.
+
 ```
-File > Add Package Dependencies…
 https://github.com/pjy0509/atlas-sdk-apple.git
 ```
 

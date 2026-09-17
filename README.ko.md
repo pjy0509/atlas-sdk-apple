@@ -11,8 +11,12 @@ Objective-C, Foundation만 쓰는 코어, 의존성 없음. **iOS 12 / macOS 10.
 <!-- tabs:start -->
 #### Xcode
 
+1. 프로젝트를 연 채 File > Add Package Dependencies… 를 선택합니다.
+2. 검색창에 저장소 주소를 붙여 넣습니다.
+3. Dependency Rule은 Up to Next Major Version, 0.1.0을 유지합니다.
+4. Add Package를 누르고 AppAtlasSDK 제품을 앱 타깃에 추가합니다.
+
 ```
-File > Add Package Dependencies…
 https://github.com/pjy0509/atlas-sdk-apple.git
 ```
 
