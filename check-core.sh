@@ -1,7 +1,8 @@
 #!/bin/sh
 # The parity gate. The Foundation-only half compiles and RUNS on macOS against
-# a throwaway mock; the UIKit binding is syntax-checked against the real
-# iPhoneOS SDK. Tiers as in tools/check-golden.sh.
+# a throwaway mock; the crash gate spawns itself as a victim and dies every
+# way the handlers claim to catch; the UIKit binding is syntax-checked against
+# the real iPhoneOS SDK. Tiers as in tools/check-golden.sh.
 set -e
 cd "$(dirname "$0")"
 
@@ -23,18 +24,24 @@ done
 BASE="http://127.0.0.1:$(cat "$OUT/port")"
 
 SOURCES="Sources/AppAtlasSDK"
-clang -fobjc-arc -framework Foundation \
-    -I "$SOURCES/include" -I "$SOURCES/Core" -I "$SOURCES/Links" \
-    "$SOURCES"/Core/*.m "$SOURCES"/Links/*.m tools/ParityMain.m \
-    -o "$OUT/parity"
+INCLUDES="-I $SOURCES/include -I $SOURCES/Core -I $SOURCES/Links -I $SOURCES/Crash"
+MODULES="$SOURCES/Core/*.m $SOURCES/Links/*.m $SOURCES/Crash/*.m $SOURCES/Crash/*.c"
+
+# The capture core is C the handlers run: every warning is a bug there.
+clang -c -Wall -Wextra -Werror -fno-omit-frame-pointer $INCLUDES "$SOURCES/Crash/atl_crash_capture.c" -o "$OUT/capture.o"
+
+clang -fobjc-arc -framework Foundation $INCLUDES $MODULES tools/ParityMain.m -o "$OUT/parity"
 "$OUT/parity" "$OUT/envelopes" "$BASE"
+
+# The crash gate: a victim per way of dying, then the next start over the
+# report each one left. It refuses to run under a debugger, as the hooks do.
+clang -fobjc-arc -framework Foundation -fno-omit-frame-pointer $INCLUDES $MODULES tools/CrashGateMain.m -o "$OUT/crash-gate"
+"$OUT/crash-gate" "$OUT/envelopes" "$BASE"
 
 # The UIKit touch compiles against the device SDK it will really meet.
 IOS_SDK="$(xcrun --sdk iphoneos --show-sdk-path)"
-clang -fsyntax-only -fobjc-arc -target arm64-apple-ios12.0 -isysroot "$IOS_SDK" \
-    -I "$SOURCES/include" -I "$SOURCES/Core" -I "$SOURCES/Links" \
-    "$SOURCES"/Core/*.m "$SOURCES"/Links/*.m
-echo "parity: the UIKit binding compiles for ios12"
+clang -fsyntax-only -fobjc-arc -target arm64-apple-ios12.0 -isysroot "$IOS_SDK" $INCLUDES $MODULES
+echo "parity: the UIKit binding and the capture core compile for ios12"
 
 # Swift consumes this as a module; the test target holds that shape. The
 # exit code is the verdict — "0 failures" contains the word.

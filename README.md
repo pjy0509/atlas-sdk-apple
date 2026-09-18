@@ -13,7 +13,7 @@ distributed as source so a lower deployment target stays buildable.
 
 1. Open the project and choose File > Add Package Dependencies…
 2. Paste the repository address into the search field.
-3. Keep the dependency rule Up to Next Major Version, from 0.1.0.
+3. Keep the dependency rule Up to Next Major Version, from 0.2.0.
 4. Press Add Package, then add the AppAtlasSDK product to the app target.
 
 ```
@@ -23,13 +23,14 @@ https://github.com/pjy0509/atlas-sdk-apple.git
 #### Package.swift
 
 ```swift
-.package(url: "https://github.com/pjy0509/atlas-sdk-apple.git", from: "0.1.0")
+.package(url: "https://github.com/pjy0509/atlas-sdk-apple.git", from: "0.2.0")
 ```
 
 #### Podfile
 
 ```ruby
-pod 'AppAtlasSDK'          # Links (pulls Core)
+pod 'AppAtlasSDK'          # Links and Crash (pull Core)
+pod 'AppAtlasSDK/Links'    # one module alone
 pod 'AppAtlasSDK/Core'     # the transport half alone
 ```
 <!-- tabs:end -->
@@ -54,7 +55,7 @@ import AppAtlasSDK
 func application(_ application: UIApplication,
                  didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
     Atlas.start(withKey: "sdk_…")
-    // Modules (Links, later Push and Crash) wire in from here.
+    // Modules (Links, Crash) wire in from here.
     return true
 }
 ```
@@ -66,11 +67,22 @@ func application(_ application: UIApplication,
 - (BOOL)application:(UIApplication *)application
     didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
     [Atlas startWithKey:@"sdk_…"];
-    // Modules (Links, later Push and Crash) wire in from here.
+    // Modules (Links, Crash) wire in from here.
     return YES;
 }
 ```
 <!-- tabs:end -->
+
+### Modules
+
+| Subspec | What it is | Floor |
+|---|---|---|
+| `AppAtlasSDK/Core` | Envelopes, the disk queue, the sender. Every module rides it. | iOS 12 / macOS 10.13 |
+| `AppAtlasSDK/Links` | Deep-link inflow: the clipboard handoff and direct opens. | iOS 12 |
+| `AppAtlasSDK/Crash` | Crash reporting: mach exceptions, signals, uncaught exceptions, hangs, kills, sessions. | iOS 12 / macOS 10.13 |
+
+`pod 'AppAtlasSDK'` brings Links and Crash; SPM ships the one target with
+every module in it, and a module the app never calls costs nothing at run time.
 
 ## Links
 
@@ -196,6 +208,127 @@ the app keeps working.
 `AtlasLinks.firstReferringLink()` returns the link that produced the install,
 forever.
 
+## Crash
+
+<!-- tabs:start -->
+#### Swift
+
+```swift title="AppDelegate.swift"
+// AppDelegate.swift
+func application(_ application: UIApplication,
+                 didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+    Atlas.start(withKey: "sdk_…")
+    // Crashes, hangs and kills are caught from this line on. The rest is optional.
+
+    // Your own id for the signed-in user, and the state worth seeing beside a crash.
+    AtlasCrash.setUserId("u-123")
+    AtlasCrash.setKey("screen", value: "checkout")
+    AtlasCrash.leaveBreadcrumb("cart", message: "add")
+    AtlasCrash.log("cart total recomputed")
+
+    return true
+}
+```
+
+```swift title="CheckoutViewController.swift"
+// CheckoutViewController.swift: anywhere an error is caught but still worth knowing about.
+private func pay() {
+    do {
+        try cart.charge()
+    } catch {
+        AtlasCrash.recordError(error)
+        // The app's own recovery goes here. Example:
+        // showRetry()
+    }
+}
+```
+
+#### Objective-C
+
+```objc title="AppDelegate.m"
+// AppDelegate.m
+- (BOOL)application:(UIApplication *)application
+    didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
+    [Atlas startWithKey:@"sdk_…"];
+    // Crashes, hangs and kills are caught from this line on. The rest is optional.
+
+    // Your own id for the signed-in user, and the state worth seeing beside a crash.
+    [ATLCrash setUserId:@"u-123"];
+    [ATLCrash setKey:@"screen" value:@"checkout"];
+    [ATLCrash leaveBreadcrumb:@"cart" message:@"add"];
+    [ATLCrash log:@"cart total recomputed"];
+
+    return YES;
+}
+```
+
+```objc title="CheckoutViewController.m"
+// CheckoutViewController.m: anywhere an error is caught but still worth knowing about.
+- (void)pay {
+    NSError *error = nil;
+
+    if (![self.cart chargeWithError:&error]) {
+        [ATLCrash recordError:error];
+        // The app's own recovery goes here. Example:
+        // [self showRetry];
+    }
+}
+```
+<!-- tabs:end -->
+
+What is caught, with no call beyond `Atlas.start`:
+
+| Death | How it is caught |
+|---|---|
+| A bad memory access, a stack overflow, a Swift runtime trap (`fatalError`, a force-unwrap, an index out of range), on any thread | A mach exception server on a thread of its own, ahead of any signal — with a spare thread so a crash inside the handler is seen too |
+| `abort()` and the other fatal signals (SIGABRT, SIGBUS, SIGFPE, SIGILL, SIGSYS, SIGTRAP, SIGPIPE unless the app ignores it) | Signal handlers on an alternate stack, chained ahead of whoever held them |
+| An uncaught `NSException` | The uncaught-exception handler, chained ahead of the previous one |
+| A main-thread hang | A watchdog: five seconds without an answer from the main queue, reported with the main thread's frames, once per freeze |
+| An out-of-memory kill, a watchdog kill | Inferred at the next start from the run's own record — only when the app was active in the foreground on the same boot and build, with no crash report, no clean exit and no debugger |
+| What the OS saw and nothing in-process could | MetricKit (iOS 14, macOS 12): crash diagnostics for a window this SDK reported nothing in, CPU and disk-write exceptions |
+
+Everything on the crash path is C and async-signal-safe: no allocation, no
+Objective-C, memory reserved at start, one `write()` per line. A crash is
+written to disk with every thread's frames, the crashed thread's registers and
+the runtime's own message (`__crash_info`: the text of a Swift `fatalError`,
+the reason of an `abort()`), and sent at the next start together with the end
+of its session, which is what crash-free sessions are counted from. Every
+report carries the last 100 breadcrumbs, up to 64 keys, the newest 64 KB of
+`AtlasCrash.log` lines, and the device's state at that moment: free memory
+and disk, thermal and low-power state, whether it was in the foreground. A
+crash within five seconds of start is sent first thing at the next start.
+
+Under a debugger the native hooks stay uninstalled — LLDB and a mach exception
+server cannot share a port — and the console says so once; handled errors,
+sessions and context still work. SwiftUI previews are not counted as runs.
+
+`AtlasCrash.setEnabled(false)` stops collection and remembers the choice, for a
+consent screen. `AtlasCrash.crashedLastRun()` says whether the previous run
+ended in a crash, a hang kill or an out-of-memory kill.
+
+### Readable stack traces (dSYM)
+
+A native frame is reported as the image's UUID plus an address relative to the
+image, which is exactly what its dSYM resolves. Upload the DWARF file inside
+each build's dSYM — the app's and every framework's — and the server resolves
+function, file and line, inlined frames included. The UUID is read from the
+file, so only the file is needed. Upload before the release reaches users: a
+crash grouped by address stays a separate issue.
+
+```sh title="upload-dsyms.sh"
+# CI, after archiving: one call per dSYM in the archive (the app's and each framework's).
+# ATLAS_API_TOKEN is an App Atlas API access token, never the SDK key.
+for dwarf in "$ARCHIVE_PATH"/dSYMs/*.dSYM/Contents/Resources/DWARF/*; do
+  curl --fail -X POST \
+    "https://appatlas.dev/api/ingest/symbols?store=app-store&appId=$BUNDLE_ID&kind=macho" \
+    -H "Authorization: Bearer $ATLAS_API_TOKEN" \
+    --data-binary "@$dwarf"
+done
+```
+
+Bitcode-recompiled builds get their dSYMs from App Store Connect after
+processing; upload those the same way.
+
 ## Privacy
 
 The SDK mints an install-scoped random id and reads no device or advertising
@@ -212,15 +345,17 @@ and identifies no one.
 Sources/AppAtlasSDK/include   public headers (SPM's publicHeadersPath)
 Sources/AppAtlasSDK/Core      envelopes, queue, transport, device context
 Sources/AppAtlasSDK/Links     the links module; UIKit is touched in one file
+Sources/AppAtlasSDK/Crash     the crash module; the capture core is C, MetricKit is loaded by name
 ```
 
 ## Checks
 
 ```sh
 sh check-core.sh                             # runs the Foundation half on macOS,
-                                             # syntax-checks the UIKit binding for iOS 12,
-                                             # checks the Swift surface, and compares
-                                             # the golden bytes
+                                             # spawns itself as a victim and dies every
+                                             # way the crash hooks catch, syntax-checks
+                                             # the UIKit binding for iOS 12, checks the
+                                             # Swift surface, and compares the golden bytes
 ATLAS_SERVER=../app-atlas sh check-core.sh   # and the server's own parser
 swift build                                  # the SPM manifest
 ```

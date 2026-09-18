@@ -20,7 +20,10 @@ if [ "$ATLAS_GOLDEN" = "update" ]; then
     cp "$WRITTEN"/*.envelope "$WRITTEN"/claim-request.json "$GOLDEN/"
     echo "golden: rewritten from this run — review the diff before committing"
 else
-    for file in open.envelope hostile.envelope pair.envelope claim-request.json; do
+    # Every committed golden: a repo pins exactly the modules it ships.
+    for path in "$GOLDEN"/*; do
+        file="$(basename "$path")"
+
         if ! cmp -s "$GOLDEN/$file" "$WRITTEN/$file"; then
             echo "golden: $file drifted from tools/golden/$file" >&2
             diff "$GOLDEN/$file" "$WRITTEN/$file" || true

@@ -37,16 +37,22 @@ static ATLCore *ATLSharedCore = nil;
 
     // Modules on the classpath wake with the core; a pod the app did not
     // ship is simply absent (the Android binding's reflective boot, in
-    // NSClassFromString form).
-    Class links = NSClassFromString(@"ATLLinks");
+    // NSClassFromString form). Crash first: its hooks should be in place
+    // before anything else runs.
+    [self bootModule:@"ATLCrash"];
+    [self bootModule:@"ATLLinks"];
+}
+
++ (void)bootModule:(NSString *)className {
+    Class module = NSClassFromString(className);
     SEL boot = NSSelectorFromString(@"boot");
 
-    if (links != nil && [links respondsToSelector:boot]) {
+    if (module != nil && [module respondsToSelector:boot]) {
         // Suppressed because the selector is resolved by name on purpose: the
         // class is absent unless the app shipped the module.
         #pragma clang diagnostic push
         #pragma clang diagnostic ignored "-Warc-performSelector-leaks"
-        [links performSelector:boot];
+        [module performSelector:boot];
         #pragma clang diagnostic pop
     }
 }

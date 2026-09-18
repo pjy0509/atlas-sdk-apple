@@ -12,10 +12,11 @@ import AppAtlasSDK
 final class SwiftInteropTests: XCTestCase {
 
     func testTheNamesMatchTheOtherSdks() {
-        // ATLLink/ATLLinks/ATLCore wear the prefix only because Objective-C
-        // has no namespaces; Swift is given the cross-platform names.
+        // ATLLink/ATLLinks/ATLCore/ATLCrash wear the prefix only because
+        // Objective-C has no namespaces; Swift is given the cross-platform names.
         XCTAssertFalse(AtlasCore.newEventId().isEmpty)
         XCTAssertNotNil(AtlasLinks.self)
+        XCTAssertNotNil(AtlasCrash.self)
     }
 
     func testNullabilityIsAnnotated() {
@@ -49,5 +50,17 @@ final class SwiftInteropTests: XCTestCase {
 
     func testAUrlThatIsNotOursIsRefused() {
         XCTAssertFalse(AtlasLinks.handle(URL(string: "https://appatlas.dev/settings")!))
+    }
+
+    func testTheCrashSurfaceIsQuietBeforeStart() {
+        // The scope takes context before start and keeps it; reports before
+        // start go nowhere, and nothing here can crash the caller.
+        AtlasCrash.setUserId("u-1")
+        AtlasCrash.setKey("screen", value: "checkout")
+        AtlasCrash.setKey("screen", value: nil)
+        AtlasCrash.leaveBreadcrumb("cart", message: "add")
+        AtlasCrash.log("a line")
+        AtlasCrash.recordError(NSError(domain: "Test", code: 1))
+        XCTAssertFalse(AtlasCrash.crashedLastRun())
     }
 }

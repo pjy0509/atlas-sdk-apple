@@ -13,7 +13,7 @@ Objective-C, Foundation만 쓰는 코어, 의존성 없음. **iOS 12 / macOS 10.
 
 1. 프로젝트를 연 채 File > Add Package Dependencies… 를 선택합니다.
 2. 검색창에 저장소 주소를 붙여 넣습니다.
-3. Dependency Rule은 Up to Next Major Version, 0.1.0을 유지합니다.
+3. Dependency Rule은 Up to Next Major Version, 0.2.0을 유지합니다.
 4. Add Package를 누르고 AppAtlasSDK 제품을 앱 타깃에 추가합니다.
 
 ```
@@ -23,13 +23,14 @@ https://github.com/pjy0509/atlas-sdk-apple.git
 #### Package.swift
 
 ```swift
-.package(url: "https://github.com/pjy0509/atlas-sdk-apple.git", from: "0.1.0")
+.package(url: "https://github.com/pjy0509/atlas-sdk-apple.git", from: "0.2.0")
 ```
 
 #### Podfile
 
 ```ruby
-pod 'AppAtlasSDK'          # Links (Core를 함께 가져옵니다)
+pod 'AppAtlasSDK'          # Links와 Crash (Core를 함께 가져옵니다)
+pod 'AppAtlasSDK/Links'    # 모듈 하나만
 pod 'AppAtlasSDK/Core'     # 전송 반쪽만
 ```
 <!-- tabs:end -->
@@ -54,7 +55,7 @@ import AppAtlasSDK
 func application(_ application: UIApplication,
                  didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
     Atlas.start(withKey: "sdk_…")
-    // 모듈(Links, 이후 Push·Crash)은 여기서부터 배선합니다.
+    // 모듈(Links, Crash)은 여기서부터 배선합니다.
     return true
 }
 ```
@@ -66,11 +67,22 @@ func application(_ application: UIApplication,
 - (BOOL)application:(UIApplication *)application
     didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
     [Atlas startWithKey:@"sdk_…"];
-    // 모듈(Links, 이후 Push·Crash)은 여기서부터 배선합니다.
+    // 모듈(Links, Crash)은 여기서부터 배선합니다.
     return YES;
 }
 ```
 <!-- tabs:end -->
+
+### 모듈
+
+| 서브스펙 | 역할 | 하한 |
+|---|---|---|
+| `AppAtlasSDK/Core` | 엔벨로프, 디스크 큐, 전송기. 모든 모듈의 바탕입니다. | iOS 12 / macOS 10.13 |
+| `AppAtlasSDK/Links` | 딥링크 유입: 클립보드 인계와 직접 열림. | iOS 12 |
+| `AppAtlasSDK/Crash` | 크래시 리포팅: mach 예외, 시그널, 미처리 예외, 행, kill, 세션. | iOS 12 / macOS 10.13 |
+
+`pod 'AppAtlasSDK'`는 Links와 Crash를 함께 가져옵니다. SPM은 모든 모듈이
+든 타깃 하나를 배포하며, 앱이 부르지 않는 모듈은 실행 시 비용이 없습니다.
 
 ## Links
 
@@ -194,6 +206,125 @@ iOS 16부터는 읽는 순간 시스템이 허용/거부 알림을 띄우고, iO
 
 `AtlasLinks.firstReferringLink()`는 설치를 만든 링크를 언제까지나 돌려줍니다.
 
+## Crash
+
+<!-- tabs:start -->
+#### Swift
+
+```swift title="AppDelegate.swift"
+// AppDelegate.swift
+func application(_ application: UIApplication,
+                 didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+    Atlas.start(withKey: "sdk_…")
+    // 이 줄부터 크래시, 행, kill이 잡힙니다. 나머지는 선택입니다.
+
+    // 로그인한 사용자의 여러분 쪽 id와, 크래시 옆에서 보고 싶은 상태.
+    AtlasCrash.setUserId("u-123")
+    AtlasCrash.setKey("screen", value: "checkout")
+    AtlasCrash.leaveBreadcrumb("cart", message: "add")
+    AtlasCrash.log("cart total recomputed")
+
+    return true
+}
+```
+
+```swift title="CheckoutViewController.swift"
+// CheckoutViewController.swift: 오류를 잡았지만 알아 둘 가치가 있는 곳 어디서든.
+private func pay() {
+    do {
+        try cart.charge()
+    } catch {
+        AtlasCrash.recordError(error)
+        // 앱 자체의 복구는 여기에. 예:
+        // showRetry()
+    }
+}
+```
+
+#### Objective-C
+
+```objc title="AppDelegate.m"
+// AppDelegate.m
+- (BOOL)application:(UIApplication *)application
+    didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
+    [Atlas startWithKey:@"sdk_…"];
+    // 이 줄부터 크래시, 행, kill이 잡힙니다. 나머지는 선택입니다.
+
+    // 로그인한 사용자의 여러분 쪽 id와, 크래시 옆에서 보고 싶은 상태.
+    [ATLCrash setUserId:@"u-123"];
+    [ATLCrash setKey:@"screen" value:@"checkout"];
+    [ATLCrash leaveBreadcrumb:@"cart" message:@"add"];
+    [ATLCrash log:@"cart total recomputed"];
+
+    return YES;
+}
+```
+
+```objc title="CheckoutViewController.m"
+// CheckoutViewController.m: 오류를 잡았지만 알아 둘 가치가 있는 곳 어디서든.
+- (void)pay {
+    NSError *error = nil;
+
+    if (![self.cart chargeWithError:&error]) {
+        [ATLCrash recordError:error];
+        // 앱 자체의 복구는 여기에. 예:
+        // [self showRetry];
+    }
+}
+```
+<!-- tabs:end -->
+
+`Atlas.start` 외에 아무 호출 없이 잡히는 것:
+
+| 죽는 방식 | 잡는 방법 |
+|---|---|
+| 잘못된 메모리 접근, 스택 오버플로, Swift 런타임 트랩(`fatalError`, 강제 언래핑, 범위 밖 인덱스), 어느 스레드든 | 전용 스레드의 mach 예외 서버. 시그널보다 먼저 받습니다. 예비 스레드가 하나 더 있어 핸들러 안에서 난 크래시도 봅니다 |
+| `abort()`와 그 밖의 치명 시그널(SIGABRT, SIGBUS, SIGFPE, SIGILL, SIGSYS, SIGTRAP, 앱이 무시하지 않는 한 SIGPIPE) | 대체 스택 위의 시그널 핸들러. 기존 핸들러 앞에 체인으로 들어갑니다 |
+| 미처리 `NSException` | 미처리 예외 핸들러. 이전 핸들러 앞에 체인으로 들어갑니다 |
+| 메인 스레드 행 | 워치독: 메인 큐가 5초 동안 답하지 않으면 메인 스레드의 프레임과 함께, freeze당 한 번 보고합니다 |
+| 메모리 부족 kill, 워치독 kill | 다음 실행 때 그 실행의 기록으로 추론합니다. 같은 부팅·같은 빌드에서 포그라운드에 활성 상태였고, 크래시 리포트도 정상 종료도 디버거도 없을 때만입니다 |
+| OS는 봤지만 프로세스 안에서는 볼 수 없던 것 | MetricKit(iOS 14, macOS 12): 이 SDK가 아무것도 보고하지 않은 기간의 크래시 진단, CPU·디스크 쓰기 예외 |
+
+크래시 경로는 전부 C이며 async-signal-safe입니다. 할당도 Objective-C도 없고,
+메모리는 시작 때 확보하며, 한 줄에 `write()` 한 번입니다. 크래시는 모든
+스레드의 프레임, 크래시 스레드의 레지스터, 런타임 자체의 메시지(`__crash_info`:
+Swift `fatalError`의 문구, `abort()`의 사유)와 함께 디스크에 기록되고, 다음 실행
+때 세션 종료 상태와 함께 전송됩니다. crash-free 세션은 이 세션으로 계산합니다.
+모든 리포트에 최근 브레드크럼 100개, 키 64개, `AtlasCrash.log`의 최근 64KB,
+그리고 그 순간의 기기 상태가 실립니다. 남은 메모리와 디스크, 발열·저전력 상태,
+포그라운드 여부입니다. 시작 후 5초 안에 난 크래시는 다음 실행에서 가장 먼저
+전송됩니다.
+
+디버거가 붙어 있으면 네이티브 훅은 설치하지 않습니다. LLDB와 mach 예외 서버는
+포트 하나를 나눠 쓸 수 없기 때문이며, 콘솔에 한 번 알립니다. 처리된 오류, 세션,
+컨텍스트는 그대로 동작합니다. SwiftUI 프리뷰는 실행으로 세지 않습니다.
+
+`AtlasCrash.setEnabled(false)`는 수집을 멈추고 그 선택을 기억합니다. 동의 화면에
+씁니다. `AtlasCrash.crashedLastRun()`은 직전 실행이 크래시, 행 kill, 메모리 부족
+kill로 끝났는지 알려 줍니다.
+
+### 읽을 수 있는 스택 트레이스 (dSYM)
+
+네이티브 프레임은 이미지의 UUID와 이미지 상대 주소로 보고됩니다. 그 dSYM이 푸는
+것이 정확히 그것입니다. 빌드마다 dSYM 안의 DWARF 파일을 — 앱과 모든 프레임워크의
+것을 — 올리면 서버가 함수, 파일, 행으로 복원합니다. 인라인된 프레임까지입니다.
+UUID는 파일에서 읽으므로 파일만 올리면 됩니다. 릴리스가 사용자에게 닿기 전에
+올립니다. 주소로 묶인 크래시는 별개의 이슈로 남습니다.
+
+```sh title="upload-dsyms.sh"
+# CI, 아카이브 다음. 아카이브의 dSYM마다 한 번(앱과 프레임워크 각각).
+# ATLAS_API_TOKEN은 App Atlas API 액세스 토큰이며 SDK 키가 아닙니다.
+for dwarf in "$ARCHIVE_PATH"/dSYMs/*.dSYM/Contents/Resources/DWARF/*; do
+  curl --fail -X POST \
+    "https://appatlas.dev/api/ingest/symbols?store=app-store&appId=$BUNDLE_ID&kind=macho" \
+    -H "Authorization: Bearer $ATLAS_API_TOKEN" \
+    --data-binary "@$dwarf"
+done
+```
+
+비트코드로 재컴파일된 빌드의 dSYM은 처리 후 App Store Connect에서 받습니다.
+같은 방법으로 올립니다.
+
 ## 프라이버시
 
 SDK는 설치 단위의 난수 id 하나를 만들 뿐, 기기 식별자나 광고 식별자를 읽지
@@ -210,14 +341,17 @@ SDK는 설치 단위의 난수 id 하나를 만들 뿐, 기기 식별자나 광�
 Sources/AppAtlasSDK/include   공개 헤더 (SPM의 publicHeadersPath)
 Sources/AppAtlasSDK/Core      엔벨로프, 큐, 전송, 기기 컨텍스트
 Sources/AppAtlasSDK/Links     링크 모듈; UIKit은 한 파일에서만 닿습니다
+Sources/AppAtlasSDK/Crash     크래시 모듈; 캡처 코어는 C, MetricKit은 이름으로 로드합니다
 ```
 
 ## 검사
 
 ```sh
 sh check-core.sh                             # macOS에서 Foundation 반쪽 실행,
-                                             # iOS 12용 UIKit 바인딩 문법 검사,
-                                             # Swift 표면 검사, 골든 바이트 비교
+                                             # 자기 자신을 victim으로 띄워 크래시 훅이
+                                             # 잡는 방식마다 죽여 보고, iOS 12용 UIKit
+                                             # 바인딩 문법 검사, Swift 표면 검사,
+                                             # 골든 바이트 비교
 ATLAS_SERVER=../app-atlas sh check-core.sh   # 서버의 실제 파서까지
 swift build                                  # SPM 매니페스트
 ```
