@@ -39,8 +39,8 @@ pod 'AppAtlasSDK/Core'     # the transport half alone
 
 ## Core
 
-Swift reaches this as a module — no bridging header, which is an app's own
-business and never a library's. SPM generates the module map; CocoaPods writes
+Swift reaches this as a module, with no bridging header. A bridging header is
+an app's own business and never a library's. SPM generates the module map; CocoaPods writes
 one under `use_frameworks!`. In Objective-C the `ATL` prefix stands in for the
 namespace the language does not have. The names are the ones the Android and
 .NET SDKs use.
@@ -159,7 +159,7 @@ so a cold-start tap is never lost.
 ### The deferred link
 
 Apple offers no install referrer, so the visit page hands the link over through
-the clipboard — with the visitor's own tap — and the app claims it once:
+the clipboard, with the visitor's own tap, and the app claims it once:
 
 <!-- tabs:start -->
 #### Swift
@@ -280,12 +280,12 @@ What is caught, with no call beyond `Atlas.start`:
 
 | Death | How it is caught |
 |---|---|
-| A bad memory access, a stack overflow, a Swift runtime trap (`fatalError`, a force-unwrap, an index out of range), on any thread | A mach exception server on a thread of its own, ahead of any signal — with a spare thread so a crash inside the handler is seen too |
-| `abort()` and the other fatal signals (SIGABRT, SIGBUS, SIGFPE, SIGILL, SIGSYS, SIGTRAP, SIGPIPE unless the app ignores it) | Signal handlers on an alternate stack, chained ahead of whoever held them |
-| An uncaught `NSException` | The uncaught-exception handler, chained ahead of the previous one |
-| A main-thread hang | A watchdog: five seconds without an answer from the main queue, reported with the main thread's frames, once per freeze |
-| An out-of-memory kill, a watchdog kill | Inferred at the next start from the run's own record — only when the app was active in the foreground on the same boot and build, with no crash report, no clean exit and no debugger |
-| What the OS saw and nothing in-process could | MetricKit (iOS 14, macOS 12): crash diagnostics for a window this SDK reported nothing in, CPU and disk-write exceptions |
+| A bad memory access, a stack overflow, a Swift runtime trap (`fatalError`, a force-unwrap, an index out of range), on any thread. | A mach exception server on a thread of its own, ahead of any signal, with a spare thread so a crash inside the handler is seen too. |
+| `abort()` and the other fatal signals (SIGABRT, SIGBUS, SIGFPE, SIGILL, SIGSYS, SIGTRAP, SIGPIPE unless the app ignores it) | Signal handlers on an alternate stack, chained ahead of whoever held them. |
+| An uncaught `NSException`. | The uncaught-exception handler, chained ahead of the previous one. |
+| A main-thread hang. | A watchdog: five seconds without an answer from the main queue, reported with the main thread's frames, once per freeze. |
+| An out-of-memory kill, a watchdog kill. | Inferred at the next start from the run's own record, only when the app was active in the foreground on the same boot and build, with no crash report, no clean exit and no debugger. |
+| What the OS saw and nothing in-process could. | MetricKit (iOS 14, macOS 12): crash diagnostics for a window this SDK reported nothing in, CPU and disk-write exceptions. |
 
 Everything on the crash path is C and async-signal-safe: no allocation, no
 Objective-C, memory reserved at start, one `write()` per line. A crash is
@@ -298,9 +298,9 @@ report carries the last 100 breadcrumbs, up to 64 keys, the newest 64 KB of
 and disk, thermal and low-power state, whether it was in the foreground. A
 crash within five seconds of start is sent first thing at the next start.
 
-Under a debugger the native hooks stay uninstalled — LLDB and a mach exception
-server cannot share a port — and the console says so once; handled errors,
-sessions and context still work. SwiftUI previews are not counted as runs.
+Under a debugger the native hooks stay uninstalled, because LLDB and a mach
+exception server cannot share a port, and the console says so once. Handled
+errors, sessions and context still work. SwiftUI previews are not counted as runs.
 
 `AtlasCrash.setEnabled(false)` stops collection and remembers the choice, for a
 consent screen. `AtlasCrash.crashedLastRun()` says whether the previous run
@@ -310,7 +310,7 @@ ended in a crash, a hang kill or an out-of-memory kill.
 
 A native frame is reported as the image's UUID plus an address relative to the
 image, which is exactly what its dSYM resolves. Upload the DWARF file inside
-each build's dSYM — the app's and every framework's — and the server resolves
+each build's dSYM, the app's and every framework's, and the server resolves
 function, file and line, inlined frames included. The UUID is read from the
 file, so only the file is needed. Upload before the release reaches users: a
 crash grouped by address stays a separate issue.
@@ -332,7 +332,7 @@ processing; upload those the same way.
 ## Privacy
 
 The SDK mints an install-scoped random id and reads no device or advertising
-identifier — not the IDFA, not the vendor id, nothing that survives an
+identifier: not the IDFA, not the vendor id, nothing that survives an
 uninstall. No ATT prompt is required by anything here. Device context (OS
 version, model, locale, timezone, app version) is the standard crash-report set
 and identifies no one.
