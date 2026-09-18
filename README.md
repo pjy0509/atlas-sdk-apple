@@ -35,7 +35,8 @@ pod 'AppAtlasSDK/Core'     # the transport half alone
 <!-- tabs:end -->
 
 <!-- guide:start -->
-## Start
+
+## Core
 
 Swift reaches this as a module — no bridging header, which is an app's own
 business and never a library's. SPM generates the module map; CocoaPods writes
@@ -143,7 +144,7 @@ func application(_ application: UIApplication, continue userActivity: NSUserActi
 A link that arrives before the listener is registered is queued and replayed,
 so a cold-start tap is never lost.
 
-## The deferred link
+### The deferred link
 
 Apple offers no install referrer, so the visit page hands the link over through
 the clipboard — with the visitor's own tap — and the app claims it once:
@@ -202,6 +203,7 @@ identifier — not the IDFA, not the vendor id, nothing that survives an
 uninstall. No ATT prompt is required by anything here. Device context (OS
 version, model, locale, timezone, app version) is the standard crash-report set
 and identifies no one.
+
 <!-- guide:end -->
 
 ## Layout

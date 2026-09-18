@@ -35,7 +35,8 @@ pod 'AppAtlasSDK/Core'     # 仅传输那一半
 <!-- tabs:end -->
 
 <!-- guide:start -->
-## 启动
+
+## 核心
 
 Swift 直接以模块访问，无需桥接头文件。桥接头文件是应用自己的事，
 库不应替它做主。SPM 会生成模块映射；CocoaPods 在 `use_frameworks!`
@@ -141,7 +142,7 @@ func application(_ application: UIApplication, continue userActivity: NSUserActi
 
 先于监听器到达的链接会被保留并重放，冷启动的点击不会丢失。
 
-## 延迟链接
+### 延迟链接
 
 Apple 没有 install referrer，因此访问页面借访客自己的点击把链接放进
 剪贴板，应用兑换一次：
@@ -196,6 +197,7 @@ SDK 只生成一个安装范围内的随机 id，不读取任何设备或广告�
 这里没有任何部分需要 ATT 提示。随附发送的设备信息
 （系统版本、机型、区域、时区、应用版本）是常见的崩溃报告字段，
 不指向任何人。
+
 <!-- guide:end -->
 
 ## 布局
