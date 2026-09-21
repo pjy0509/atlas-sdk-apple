@@ -227,12 +227,15 @@ iOS 16부터는 읽는 순간 시스템이 허용/거부 알림을 띄우고, iO
 func application(_ application: UIApplication,
                  didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
     Atlas.start(withKey: "sdk_…")
-    // 이 줄부터 크래시, 행, kill이 잡힙니다. 나머지는 선택입니다.
 
-    // 로그인한 사용자의 여러분 쪽 id와, 크래시 옆에서 보고 싶은 상태.
+    // 아래는 선택입니다.
+    // 로그인한 사용자를 크래시 옆에 남길 때.
     AtlasCrash.setUserId("u-123")
+    // 이슈를 좁힐 축이 필요할 때. 실험 그룹, 서버 환경, 화면.
     AtlasCrash.setKey("screen", value: "checkout")
+    // SDK가 모르는 앱 고유의 단계를 남길 때. 화면 전환과 시스템 이벤트는 이미 자동입니다.
     AtlasCrash.leaveBreadcrumb("cart", message: "add")
+    // 크래시 직전 코드 경로를 문장으로 남길 때.
     AtlasCrash.log("cart total recomputed")
 
     return true
@@ -259,12 +262,15 @@ private func pay() {
 - (BOOL)application:(UIApplication *)application
     didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
     [Atlas startWithKey:@"sdk_…"];
-    // 이 줄부터 크래시, 행, kill이 잡힙니다. 나머지는 선택입니다.
 
-    // 로그인한 사용자의 여러분 쪽 id와, 크래시 옆에서 보고 싶은 상태.
+    // 아래는 선택입니다.
+    // 로그인한 사용자를 크래시 옆에 남길 때.
     [ATLCrash setUserId:@"u-123"];
+    // 이슈를 좁힐 축이 필요할 때. 실험 그룹, 서버 환경, 화면.
     [ATLCrash setKey:@"screen" value:@"checkout"];
+    // SDK가 모르는 앱 고유의 단계를 남길 때. 화면 전환과 시스템 이벤트는 이미 자동입니다.
     [ATLCrash leaveBreadcrumb:@"cart" message:@"add"];
+    // 크래시 직전 코드 경로를 문장으로 남길 때.
     [ATLCrash log:@"cart total recomputed"];
 
     return YES;

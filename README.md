@@ -230,12 +230,15 @@ forever.
 func application(_ application: UIApplication,
                  didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
     Atlas.start(withKey: "sdk_…")
-    // Crashes, hangs and kills are caught from this line on. The rest is optional.
 
-    // Your own id for the signed-in user, and the state worth seeing beside a crash.
+    // Everything below is optional.
+    // For a signed-in user to be named beside the crash.
     AtlasCrash.setUserId("u-123")
+    // For an axis to filter issues by: an experiment group, a server environment, a screen.
     AtlasCrash.setKey("screen", value: "checkout")
+    // For a step only the app knows; screens and system events are already automatic.
     AtlasCrash.leaveBreadcrumb("cart", message: "add")
+    // For the code path before a crash, in words.
     AtlasCrash.log("cart total recomputed")
 
     return true
@@ -262,12 +265,15 @@ private func pay() {
 - (BOOL)application:(UIApplication *)application
     didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
     [Atlas startWithKey:@"sdk_…"];
-    // Crashes, hangs and kills are caught from this line on. The rest is optional.
 
-    // Your own id for the signed-in user, and the state worth seeing beside a crash.
+    // Everything below is optional.
+    // For a signed-in user to be named beside the crash.
     [ATLCrash setUserId:@"u-123"];
+    // For an axis to filter issues by: an experiment group, a server environment, a screen.
     [ATLCrash setKey:@"screen" value:@"checkout"];
+    // For a step only the app knows; screens and system events are already automatic.
     [ATLCrash leaveBreadcrumb:@"cart" message:@"add"];
+    // For the code path before a crash, in words.
     [ATLCrash log:@"cart total recomputed"];
 
     return YES;

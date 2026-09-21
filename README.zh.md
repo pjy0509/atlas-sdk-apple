@@ -222,12 +222,15 @@ iOS 16 起，读取时系统会弹出允许或拒绝的粘贴提示；iOS 14 与
 func application(_ application: UIApplication,
                  didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
     Atlas.start(withKey: "sdk_…")
-    // 从这一行起，崩溃、卡死与 kill 都会被捕获。其余均为可选。
 
-    // 你方的已登录用户 id，以及值得与崩溃一起查看的状态。
+    // 以下均为可选。
+    // 需要在崩溃旁标出已登录用户时。
     AtlasCrash.setUserId("u-123")
+    // 需要自定义筛选问题的维度时：实验分组、服务端环境、页面。
     AtlasCrash.setKey("screen", value: "checkout")
+    // 记录只有应用自己知道的步骤；页面切换与系统事件已自动记录。
     AtlasCrash.leaveBreadcrumb("cart", message: "add")
+    // 以文字留下崩溃前的代码路径。
     AtlasCrash.log("cart total recomputed")
 
     return true
@@ -254,12 +257,15 @@ private func pay() {
 - (BOOL)application:(UIApplication *)application
     didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
     [Atlas startWithKey:@"sdk_…"];
-    // 从这一行起，崩溃、卡死与 kill 都会被捕获。其余均为可选。
 
-    // 你方的已登录用户 id，以及值得与崩溃一起查看的状态。
+    // 以下均为可选。
+    // 需要在崩溃旁标出已登录用户时。
     [ATLCrash setUserId:@"u-123"];
+    // 需要自定义筛选问题的维度时：实验分组、服务端环境、页面。
     [ATLCrash setKey:@"screen" value:@"checkout"];
+    // 记录只有应用自己知道的步骤；页面切换与系统事件已自动记录。
     [ATLCrash leaveBreadcrumb:@"cart" message:@"add"];
+    // 以文字留下崩溃前的代码路径。
     [ATLCrash log:@"cart total recomputed"];
 
     return YES;
