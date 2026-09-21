@@ -4,7 +4,7 @@
 #import "ATLEnvelopeWriter.h"
 #import "ATLTransport.h"
 
-static NSString *const ATLCoreVersion = @"0.2.0";
+static NSString *const ATLCoreVersion = @"0.3.0";
 
 @interface ATLCore ()
 

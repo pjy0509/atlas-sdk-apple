@@ -24,7 +24,11 @@ let package = Package(
                 // The required-reason API declarations for App Store review.
                 .copy("PrivacyInfo.xcprivacy"),
             ],
-            publicHeadersPath: "include"
+            publicHeadersPath: "include",
+            linkerSettings: [
+                // Envelopes leave gzipped; libz ships with every platform here.
+                .linkedLibrary("z"),
+            ]
         ),
         // Swift consumes this as a module; the test holds that shape in place.
         .testTarget(

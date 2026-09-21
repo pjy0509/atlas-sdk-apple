@@ -19,7 +19,8 @@ extern "C" {
 // Installs the mach exception server and the signal handlers, and takes the
 // snapshot of loaded images every later frame is resolved against. Returns
 // a bitmask of what was actually installed; 0 under a debugger or when the
-// path does not fit. Call on the main thread, once.
+// path does not fit. Call on the main thread. A second call only moves the
+// report path.
 unsigned atl_crash_install(const char *report_path, unsigned wanted);
 
 // True when a debugger has the process (sysctl P_TRACED).

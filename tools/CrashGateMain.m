@@ -20,6 +20,9 @@
 
 #include "atl_crash_capture.h"
 
+// CrashGateCxx.mm: a C++ throw with no catch, from the gate's own binary.
+void gate_throw_cxx(void);
+
 extern char **environ;
 
 // The gate reaches the module's internals the way its own binding does; the
@@ -73,6 +76,8 @@ static int victim(NSString *mode, NSString *stateDir, NSString *baseUrl) {
         [NSException raise:@"GateException" format:@"raised on purpose, line %d", __LINE__];
     } else if ([mode isEqualToString:@"trap"]) {
         __builtin_trap();
+    } else if ([mode isEqualToString:@"cxx"]) {
+        gate_throw_cxx();
     } else if ([mode isEqualToString:@"stackoverflow"]) {
         return overflow(0);
     } else if ([mode isEqualToString:@"thread"]) {
@@ -162,7 +167,7 @@ static NSDictionary *crashedThread(NSDictionary *payload) {
 }
 
 static void checkCapture(NSString *outDir, NSString *baseUrl) {
-    NSArray *modes = @[@"segv", @"abrt", @"nsexception", @"trap", @"stackoverflow", @"thread"];
+    NSArray *modes = @[@"segv", @"abrt", @"nsexception", @"trap", @"stackoverflow", @"thread", @"cxx"];
 
     for (NSString *mode in modes) {
         NSString *home = [outDir stringByAppendingPathComponent:[@"home-" stringByAppendingString:mode]];
@@ -202,6 +207,16 @@ static void checkCapture(NSString *outDir, NSString *baseUrl) {
 
         require(ownFrame, [NSString stringWithFormat:@"%@: no frame in the gate binary itself", mode]);
 
+        // The system's frames are named at the next start, from the same
+        // libraries loaded again: a reader sees abort(), not an offset.
+        BOOL named = NO;
+
+        for (NSDictionary *frame in frames) {
+            if ([frame[@"image"] hasPrefix:@"/usr/lib/"] && ![frame[@"function"] hasPrefix:@"0x"]) named = YES;
+        }
+
+        require(named, [NSString stringWithFormat:@"%@: no system frame was named", mode]);
+
         if ([mode isEqualToString:@"segv"] || [mode isEqualToString:@"thread"] || [mode isEqualToString:@"stackoverflow"]) {
             require([mechanism isEqualToString:ATLMechanismMach], [NSString stringWithFormat:@"%@: a fault must come through mach, got %@", mode, mechanism]);
             require([type isEqualToString:@"EXC_BAD_ACCESS"], [NSString stringWithFormat:@"%@: type %@", mode, type]);
@@ -224,6 +239,13 @@ static void checkCapture(NSString *outDir, NSString *baseUrl) {
             require([mechanism isEqualToString:ATLMechanismUncaught], @"nsexception: mechanism");
             require([type isEqualToString:@"GateException"], [NSString stringWithFormat:@"nsexception: type %@", type]);
             require([raised[@"message"] hasPrefix:@"raised on purpose"], @"nsexception: reason lost");
+        }
+        if ([mode isEqualToString:@"cxx"]) {
+            // Uncaught, the runtime aborts; the type in flight is what groups it.
+            require([mechanism isEqualToString:ATLMechanismSignal], @"cxx: must come through the signal handler");
+            require([type isEqualToString:@"std::runtime_error"], [NSString stringWithFormat:@"cxx: type %@", type]);
+            require([raised[@"message"] containsString:@"gate cxx"], @"cxx: what() missing from __crash_info");
+            require([payload[@"mechanism"][@"native"][@"cxxException"] isEqualToString:@"std::runtime_error"], @"cxx: not flagged");
         }
         if ([mode isEqualToString:@"trap"]) {
             require([mechanism isEqualToString:ATLMechanismMach], @"trap: a brk must come through mach");

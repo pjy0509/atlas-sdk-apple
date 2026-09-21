@@ -87,6 +87,10 @@ static const NSTimeInterval ATLLaunchFlush = 2.0;
 }
 
 - (void)recordException:(NSException *)exception {
+    [self recordException:exception mechanism:ATLMechanismRecorded];
+}
+
+- (void)recordException:(NSException *)exception mechanism:(NSString *)mechanism {
     if (exception == nil || !_enabled) {
         return;
     }
@@ -114,7 +118,7 @@ static const NSTimeInterval ATLLaunchFlush = 2.0;
     NSMutableDictionary *report = [ATLCrashReport payloadWithEventId:[ATLCore newEventId]
                                                            crashedAt:[ATLCore iso:now]
                                                            sessionId:_sessionId
-                                                           mechanism:ATLMechanismRecorded
+                                                           mechanism:mechanism
                                                              handled:YES
                                                                 type:exception.name ?: @"NSException"
                                                              message:exception.reason

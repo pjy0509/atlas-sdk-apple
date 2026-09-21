@@ -11,10 +11,19 @@
 #import "ATLRunState.h"
 #import "Atlas.h"
 
+#include <TargetConditionals.h>
 #include <float.h>
+#include <objc/message.h>
+#include <objc/runtime.h>
 #include <string.h>
 
 #include "atl_crash_capture.h"
+
+// Info.plist keys: the start nobody has to write, and AppKit's one switch.
+static NSString *const ATLPlistKey = @"AtlasSDKKey";
+static NSString *const ATLPlistBaseURL = @"AtlasBaseURL";
+static NSString *const ATLPlistCrashOnNSException = @"AtlasCrashOnNSException";
+static NSString *const ATLMechanismAppKitReported = @"nsApplicationReportException";
 
 static NSString *const ATLEnabledKey = @"dev.appatlas.sdk.crash.enabled";
 // The C core writes here; read and cleared at the next start.
@@ -35,6 +44,12 @@ static NSString *ATLScopePath = nil;
 static dispatch_queue_t ATLSnapshots = nil;
 static BOOL ATLSnapshotPending = NO;
 static NSUncaughtExceptionHandler *ATLPreviousExceptionHandler = NULL;
+static dispatch_source_t ATLMemoryPressure = nil;
+static IMP ATLOriginalReportException = NULL;
+
+#if TARGET_OS_OSX
+static void ATLReportException(id self, SEL _cmd, NSException *exception);
+#endif
 
 /// The uncaught-exception path. Every Objective-C read happens here, on a
 /// process that is still whole; the C core then stops the other threads and
@@ -72,8 +87,49 @@ static void ATLHandleUncaughtException(NSException *exception) {
 @interface ATLCrash ()
 
 + (void)bootWithStateDirectory:(NSString *)directory;
++ (NSString *)stateDirectory;
++ (void)leaveAutoBreadcrumb:(NSString *)category message:(NSString *)message;
 
 @end
+
+/// The start nobody has to write. dyld runs this before main, after
+/// Foundation is up: the C capture core goes in at once (a crash in the
+/// app's own initializers is already caught), and an `AtlasSDKKey` in the
+/// Info.plist starts the rest on the main queue's first turn. An app that
+/// also calls Atlas.start loses nothing; a second start is a no-op. Nothing
+/// happens in a SwiftUI preview, under XCTest, or once the app has opted out.
+__attribute__((constructor)) static void ATLCrashPreload(void) {
+    @autoreleasepool {
+        if ([ATLRunState isPreview] || [ATLRunState isTesting]) {
+            return;
+        }
+
+        NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+
+        if ([defaults objectForKey:ATLEnabledKey] != nil && ![defaults boolForKey:ATLEnabledKey]) {
+            return;
+        }
+
+        NSString *directory = [ATLCrash stateDirectory];
+        ATLCrashEnsureDirectory(directory);
+        atl_crash_install([directory stringByAppendingPathComponent:ATLNativeReportFile].fileSystemRepresentation,
+                          ATL_CRASH_MACH | ATL_CRASH_SIGNALS);
+
+        NSBundle *bundle = [NSBundle mainBundle];
+        NSString *key = [bundle objectForInfoDictionaryKey:ATLPlistKey];
+        NSString *baseUrl = [bundle objectForInfoDictionaryKey:ATLPlistBaseURL];
+
+        if ([key isKindOfClass:[NSString class]] && key.length > 0) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                if ([baseUrl isKindOfClass:[NSString class]] && baseUrl.length > 0) {
+                    [Atlas startWithKey:key baseUrl:baseUrl];
+                } else {
+                    [Atlas startWithKey:key];
+                }
+            });
+        }
+    }
+}
 
 @implementation ATLCrash
 
@@ -84,10 +140,15 @@ static void ATLHandleUncaughtException(NSException *exception) {
     }
 }
 
-+ (void)boot {
++ (NSString *)stateDirectory {
     NSString *support = NSSearchPathForDirectoriesInDomains(NSApplicationSupportDirectory, NSUserDomainMask, YES).firstObject
         ?: NSTemporaryDirectory();
-    [self bootWithStateDirectory:[support stringByAppendingPathComponent:@"atlas/crash"]];
+
+    return [support stringByAppendingPathComponent:@"atlas/crash"];
+}
+
++ (void)boot {
+    [self bootWithStateDirectory:[self stateDirectory]];
 }
 
 + (void)bootWithStateDirectory:(NSString *)directory {
@@ -155,6 +216,8 @@ static void ATLHandleUncaughtException(NSException *exception) {
     NSSetUncaughtExceptionHandler(&ATLHandleUncaughtException);
 
     [self observeLifecycle];
+    [self observeMemoryPressure];
+    [self hookAppKit];
 
     // The hang watchdog: never where a frozen main thread is not a hang.
     if (![ATLRunState isSimulator] && ![ATLRunState isExtension] && !atl_crash_debugger_attached()) {
@@ -166,6 +229,9 @@ static void ATLHandleUncaughtException(NSException *exception) {
             [run setHanging:NO frames:nil];
             [run persist];
         }];
+        // A main thread that is not on screen is not one a user waits on,
+        // and a suspended app is not hung.
+        ATLWatchdog.isLive = ^BOOL{ return run.isForeground; };
         [ATLWatchdog start];
     }
 
@@ -216,7 +282,9 @@ static void ATLHandleUncaughtException(NSException *exception) {
 
     NSString *message = [kind isEqualToString:@"WatchdogTermination"]
         ? @"The system ended the app while its main thread was unresponsive"
-        : @"The system ended the app in the foreground without a crash: out of memory";
+        : [run previousMemoryPressure] != nil
+            ? [NSString stringWithFormat:@"The system ended the app in the foreground without a crash: out of memory (memory pressure %@)", [run previousMemoryPressure]]
+            : @"The system ended the app in the foreground without a crash: out of memory";
 
     [reporter reportExitAt:at sessionId:sessionId mechanism:ATLMechanismExitInfo type:kind message:message
                     frames:[kind isEqualToString:@"WatchdogTermination"] ? [run previousHangFrames] : nil
@@ -224,26 +292,75 @@ static void ATLHandleUncaughtException(NSException *exception) {
     reporter.crashedLastRun = YES;
 }
 
-/// The app's own lifecycle, by notification name so the module links
-/// without UIKit or AppKit; the names are the strings the constants hold.
+/// The app's own lifecycle and the events around it, by notification name
+/// so the module links without UIKit or AppKit; the names are the strings
+/// the constants hold. Each one moves the run state, leaves a breadcrumb,
+/// or both. All of it is notification-shaped: nothing is swizzled, and no
+/// event here needs a permission.
 + (void)observeLifecycle {
     NSNotificationCenter *center = [NSNotificationCenter defaultCenter];
-    NSDictionary<NSString *, void (^)(void)> *reactions = @{
-        @"UIApplicationDidBecomeActiveNotification": ^{ [ATLRun setActive:YES]; [ATLRun setForeground:YES]; },
-        @"UIApplicationWillResignActiveNotification": ^{ [ATLRun setActive:NO]; },
-        @"UIApplicationDidEnterBackgroundNotification": ^{ [ATLRun setForeground:NO]; },
-        @"UIApplicationWillEnterForegroundNotification": ^{ [ATLRun setForeground:YES]; },
-        @"UIApplicationWillTerminateNotification": ^{ [ATLRun noteCleanExit]; },
-        @"NSApplicationDidBecomeActiveNotification": ^{ [ATLRun setActive:YES]; [ATLRun setForeground:YES]; },
-        @"NSApplicationWillResignActiveNotification": ^{ [ATLRun setActive:NO]; },
-        @"NSApplicationWillTerminateNotification": ^{ [ATLRun noteCleanExit]; },
+    NSDictionary<NSString *, void (^)(NSNotification *)> *reactions = @{
+        // iOS, tvOS, visionOS
+        @"UIApplicationDidBecomeActiveNotification": ^(NSNotification *note) {
+            [ATLRun setActive:YES]; [ATLRun setForeground:YES]; [self leaveAutoBreadcrumb:@"app.lifecycle" message:@"active"];
+        },
+        @"UIApplicationWillResignActiveNotification": ^(NSNotification *note) {
+            [ATLRun setActive:NO]; [self leaveAutoBreadcrumb:@"app.lifecycle" message:@"inactive"];
+        },
+        @"UIApplicationDidEnterBackgroundNotification": ^(NSNotification *note) {
+            [ATLRun setForeground:NO]; [self leaveAutoBreadcrumb:@"app.lifecycle" message:@"background"];
+        },
+        @"UIApplicationWillEnterForegroundNotification": ^(NSNotification *note) {
+            [ATLRun setForeground:YES]; [self leaveAutoBreadcrumb:@"app.lifecycle" message:@"foreground"];
+        },
+        @"UIApplicationWillTerminateNotification": ^(NSNotification *note) {
+            [ATLRun noteCleanExit]; [self leaveAutoBreadcrumb:@"app.lifecycle" message:@"terminate"];
+        },
+        @"UIApplicationDidReceiveMemoryWarningNotification": ^(NSNotification *note) {
+            [ATLRun setMemoryPressure:@"warning"]; [self leaveAutoBreadcrumb:@"app.memory" message:@"memory warning"];
+        },
+        @"UIDeviceOrientationDidChangeNotification": ^(NSNotification *note) {
+            [self leaveAutoBreadcrumb:@"device.orientation" message:[self orientationOf:note.object]];
+        },
+        @"UIKeyboardDidShowNotification": ^(NSNotification *note) { [self leaveAutoBreadcrumb:@"ui.keyboard" message:@"shown"]; },
+        @"UIKeyboardDidHideNotification": ^(NSNotification *note) { [self leaveAutoBreadcrumb:@"ui.keyboard" message:@"hidden"]; },
+        @"UIApplicationUserDidTakeScreenshotNotification": ^(NSNotification *note) { [self leaveAutoBreadcrumb:@"device" message:@"screenshot"]; },
+        @"UISceneDidActivateNotification": ^(NSNotification *note) { [self leaveAutoBreadcrumb:@"ui.scene" message:@"activated"]; },
+        @"UISceneWillDeactivateNotification": ^(NSNotification *note) { [self leaveAutoBreadcrumb:@"ui.scene" message:@"deactivated"]; },
+        @"UISceneDidDisconnectNotification": ^(NSNotification *note) { [self leaveAutoBreadcrumb:@"ui.scene" message:@"disconnected"]; },
+        @"UIWindowDidBecomeKeyNotification": ^(NSNotification *note) { [self leaveAutoBreadcrumb:@"ui.window" message:@"key"]; },
+        // Both platforms
+        @"NSProcessInfoThermalStateDidChangeNotification": ^(NSNotification *note) {
+            [self leaveAutoBreadcrumb:@"device.thermal" message:[ATLRunState facts][@"thermalState"] ?: @"changed"];
+        },
+        @"NSProcessInfoPowerStateDidChangeNotification": ^(NSNotification *note) {
+            [self leaveAutoBreadcrumb:@"device.power" message:[NSProcessInfo processInfo].isLowPowerModeEnabled ? @"low power on" : @"low power off"];
+        },
+        @"NSSystemTimeZoneDidChangeNotification": ^(NSNotification *note) { [self leaveAutoBreadcrumb:@"system" message:@"time zone changed"]; },
+        @"NSSystemClockDidChangeNotification": ^(NSNotification *note) { [self leaveAutoBreadcrumb:@"system" message:@"clock changed"]; },
+        // macOS
+        @"NSApplicationDidBecomeActiveNotification": ^(NSNotification *note) {
+            [ATLRun setActive:YES]; [ATLRun setForeground:YES]; [self leaveAutoBreadcrumb:@"app.lifecycle" message:@"active"];
+        },
+        @"NSApplicationWillResignActiveNotification": ^(NSNotification *note) {
+            [ATLRun setActive:NO]; [self leaveAutoBreadcrumb:@"app.lifecycle" message:@"inactive"];
+        },
+        @"NSApplicationDidHideNotification": ^(NSNotification *note) { [self leaveAutoBreadcrumb:@"app.lifecycle" message:@"hidden"]; },
+        @"NSApplicationDidUnhideNotification": ^(NSNotification *note) { [self leaveAutoBreadcrumb:@"app.lifecycle" message:@"unhidden"]; },
+        @"NSApplicationWillTerminateNotification": ^(NSNotification *note) {
+            [ATLRun noteCleanExit]; [self leaveAutoBreadcrumb:@"app.lifecycle" message:@"terminate"];
+        },
+        @"NSWindowDidBecomeKeyNotification": ^(NSNotification *note) { [self leaveAutoBreadcrumb:@"ui.window" message:@"key"]; },
+        @"NSWindowWillCloseNotification": ^(NSNotification *note) { [self leaveAutoBreadcrumb:@"ui.window" message:@"closed"]; },
+        @"NSWindowDidEnterFullScreenNotification": ^(NSNotification *note) { [self leaveAutoBreadcrumb:@"ui.window" message:@"full screen"]; },
+        @"NSWindowDidExitFullScreenNotification": ^(NSNotification *note) { [self leaveAutoBreadcrumb:@"ui.window" message:@"left full screen"]; },
     };
 
     for (NSString *name in reactions) {
-        void (^react)(void) = reactions[name];
+        void (^react)(NSNotification *) = reactions[name];
 
         [center addObserverForName:name object:nil queue:nil usingBlock:^(NSNotification *note) {
-            react();
+            react(note);
 
             // Termination is the one that cannot wait for a debounce.
             if ([name hasSuffix:@"WillTerminateNotification"]) {
@@ -253,6 +370,94 @@ static void ATLHandleUncaughtException(NSException *exception) {
             }
         }];
     }
+}
+
++ (NSString *)orientationOf:(id)device {
+    // UIDevice.orientation, by selector: no UIKit link. 1 and 2 are portrait,
+    // 3 and 4 landscape, 5 and 6 flat.
+    NSInteger value = 0;
+
+    if ([device respondsToSelector:NSSelectorFromString(@"orientation")]) {
+        value = ((NSInteger (*)(id, SEL)) objc_msgSend)(device, NSSelectorFromString(@"orientation"));
+    }
+
+    switch (value) {
+        case 1: case 2: return @"portrait";
+        case 3: case 4: return @"landscape";
+        case 5: case 6: return @"flat";
+        default: return @"unknown";
+    }
+}
+
+/// The kernel's own word on memory, which arrives a little before UIKit's
+/// warning and on macOS too: the level rides the run state, so a kill in
+/// the next minute reads as out of memory with a reason attached.
++ (void)observeMemoryPressure {
+    ATLMemoryPressure = dispatch_source_create(DISPATCH_SOURCE_TYPE_MEMORYPRESSURE, 0,
+                                               DISPATCH_MEMORYPRESSURE_NORMAL | DISPATCH_MEMORYPRESSURE_WARN
+                                                   | DISPATCH_MEMORYPRESSURE_CRITICAL, ATLSnapshots);
+
+    if (ATLMemoryPressure == nil) {
+        return;
+    }
+
+    dispatch_source_t source = ATLMemoryPressure;
+    dispatch_source_set_event_handler(source, ^{
+        unsigned long level = dispatch_source_get_data(source);
+        NSString *name = (level & DISPATCH_MEMORYPRESSURE_CRITICAL) ? @"critical"
+            : (level & DISPATCH_MEMORYPRESSURE_WARN) ? @"warn" : @"normal";
+
+        [ATLRun setMemoryPressure:name];
+
+        if (![name isEqualToString:@"normal"]) {
+            [self leaveAutoBreadcrumb:@"app.memory" message:[@"memory pressure " stringByAppendingString:name]];
+        }
+
+        [ATLRun persist];
+    });
+    dispatch_resume(source);
+}
+
+/// AppKit catches every exception thrown on the main thread and carries on,
+/// so the uncaught-exception handler never hears of them. Its `reportException:`
+/// is where they surface; recorded from there as errors, with the exception's
+/// own stack, and passed through. `AtlasCrashOnNSException` in the Info.plist
+/// makes them fatal instead (NSApplicationCrashOnExceptions), which is
+/// AppKit's own switch and a behaviour change an app must choose.
++ (void)hookAppKit {
+#if TARGET_OS_OSX
+    Class application = NSClassFromString(@"NSApplication");
+    SEL selector = NSSelectorFromString(@"reportException:");
+    Method method = application != Nil ? class_getInstanceMethod(application, selector) : NULL;
+
+    if (method == NULL || ATLOriginalReportException != NULL) {
+        return;
+    }
+
+    if ([[[NSBundle mainBundle] objectForInfoDictionaryKey:ATLPlistCrashOnNSException] boolValue]) {
+        [[NSUserDefaults standardUserDefaults] registerDefaults:@{@"NSApplicationCrashOnExceptions": @YES}];
+    }
+
+    ATLOriginalReportException = method_setImplementation(method, (IMP) ATLReportException);
+#endif
+}
+
+#if TARGET_OS_OSX
+static void ATLReportException(id self, SEL _cmd, NSException *exception) {
+    @try {
+        [ATLReporter recordException:exception mechanism:ATLMechanismAppKitReported];
+    } @catch (NSException *ours) {
+        // Recording must never take the app with it.
+    }
+
+    if (ATLOriginalReportException != NULL) {
+        ((void (*)(id, SEL, NSException *)) ATLOriginalReportException)(self, _cmd, exception);
+    }
+}
+#endif
+
++ (void)leaveAutoBreadcrumb:(NSString *)category message:(NSString *)message {
+    [ATLScope leaveBreadcrumb:category message:message level:nil at:[[NSDate date] timeIntervalSince1970]];
 }
 
 // --- the scope ---------------------------------------------------------------------------

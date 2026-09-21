@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name             = 'AppAtlasSDK'
-  s.version          = '0.2.0'
+  s.version          = '0.3.0'
   s.summary          = 'App Atlas SDK for iOS and macOS: deep-link inflow, crash reporting and telemetry.'
   s.description      = <<-DESC
     The client half of App Atlas. Links: deferred deep links claimed from a
@@ -24,6 +24,7 @@ Pod::Spec.new do |s|
 
   s.requires_arc     = true
   s.frameworks       = 'Foundation'
+  s.libraries        = 'z'
   s.resource_bundles = { 'AppAtlasSDK' => ['Sources/AppAtlasSDK/PrivacyInfo.xcprivacy'] }
 
   s.default_subspecs = 'Links', 'Crash'

@@ -30,6 +30,8 @@ NS_ASSUME_NONNULL_BEGIN
 /// A handled error: reported, grouped apart from crashes, never fatal.
 - (void)recordError:(NSError *)error;
 - (void)recordException:(NSException *)exception;
+/// The same, under the mechanism that surfaced it (AppKit's reportException:).
+- (void)recordException:(NSException *)exception mechanism:(NSString *)mechanism;
 
 /// A native crash the C core wrote to `path` in an earlier run, with the
 /// scope and run state that process last persisted. The file is removed.

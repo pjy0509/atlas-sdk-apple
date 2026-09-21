@@ -69,6 +69,12 @@
             break;
         }
 
+        // Woke far later than asked: the process was suspended, not the
+        // main thread stuck. Nothing about this tick is trusted.
+        if ([self now] - posted > _timeout * 2.0) {
+            continue;
+        }
+
         // Answered within the window: no freeze, and any earlier freeze has
         // cleared, so the next one may fire again.
         if (_lastAck >= posted) {
@@ -82,7 +88,8 @@
         }
 
         // A debugger paused the main thread: not a freeze the user feels.
-        if (atl_crash_debugger_attached()) {
+        // Nor is a main thread nobody is looking at.
+        if (atl_crash_debugger_attached() || (_isLive != nil && !_isLive())) {
             continue;
         }
 

@@ -110,6 +110,24 @@
     }
 }
 
+- (void)setMemoryPressure:(NSString *)level {
+    @synchronized (self) {
+        _state[@"memoryPressure"] = level;
+    }
+}
+
+- (BOOL)isForeground {
+    @synchronized (self) {
+        return [_state[@"foreground"] boolValue];
+    }
+}
+
+- (NSString *)previousMemoryPressure {
+    id level = _previous[@"memoryPressure"];
+
+    return [level isKindOfClass:[NSString class]] && ![level isEqualToString:@"normal"] ? level : nil;
+}
+
 - (void)noteCleanExit {
     @synchronized (self) {
         _state[@"cleanExit"] = @YES;
@@ -150,6 +168,22 @@
 
     if (host_statistics64(mach_host_self(), HOST_VM_INFO64, (host_info64_t) &vm, &count) == KERN_SUCCESS) {
         facts[@"memoryFreeBytes"] = @((unsigned long long) (vm.free_count + vm.inactive_count) * (unsigned long long) vm_kernel_page_size);
+    }
+
+    // What this process is really charged for, and how much more it may
+    // take before jetsam: the two numbers an out-of-memory kill is read by.
+    task_vm_info_data_t vm_info;
+    mach_msg_type_number_t vm_count = TASK_VM_INFO_COUNT;
+
+    if (task_info(mach_task_self(), TASK_VM_INFO, (task_info_t) &vm_info, &vm_count) == KERN_SUCCESS) {
+        if (vm_count >= TASK_VM_INFO_REV1_COUNT) {
+            facts[@"memoryFootprintBytes"] = @((unsigned long long) vm_info.phys_footprint);
+        }
+#if defined(TASK_VM_INFO_REV4_COUNT)
+        if (vm_count >= TASK_VM_INFO_REV4_COUNT && vm_info.limit_bytes_remaining > 0) {
+            facts[@"memoryLimitRemainingBytes"] = @((unsigned long long) vm_info.limit_bytes_remaining);
+        }
+#endif
     }
 
     NSDictionary *volume = [[NSFileManager defaultManager] attributesOfFileSystemForPath:NSHomeDirectory() error:NULL];
@@ -220,6 +254,10 @@
 
 + (BOOL)isPreview {
     return getenv("XCODE_RUNNING_FOR_PREVIEWS") != NULL;
+}
+
++ (BOOL)isTesting {
+    return getenv("XCTestConfigurationFilePath") != NULL;
 }
 
 + (BOOL)isPrewarmed {

@@ -13,7 +13,7 @@ Objective-C，核心只依赖 Foundation，零依赖。支持 **iOS 12 / macOS 1
 
 1. 打开项目，选择 File > Add Package Dependencies…
 2. 把仓库地址粘贴到搜索框。
-3. Dependency Rule 保持 Up to Next Major Version，从 0.2.0 起。
+3. Dependency Rule 保持 Up to Next Major Version，从 0.3.0 起。
 4. 点击 Add Package，把 AppAtlasSDK 产品添加到应用目标。
 
 ```
@@ -23,7 +23,7 @@ https://github.com/pjy0509/atlas-sdk-apple.git
 #### Package.swift
 
 ```swift
-.package(url: "https://github.com/pjy0509/atlas-sdk-apple.git", from: "0.2.0")
+.package(url: "https://github.com/pjy0509/atlas-sdk-apple.git", from: "0.3.0")
 ```
 
 #### Podfile
@@ -71,6 +71,16 @@ func application(_ application: UIApplication,
 }
 ```
 <!-- tabs:end -->
+
+也可以不写代码：把密钥写进 Info.plist，SDK 会自行启动。原生崩溃钩子由库初始化器
+在 `main` 之前装入，应用自身启动过程中的崩溃也已被捕获；其余部分在主队列的第一轮启动。
+同时调用 `Atlas.start` 也不会有损失，第二次启动是空操作。`AtlasBaseURL` 覆盖服务器。
+
+```xml title="Info.plist"
+<!-- Info.plist -->
+<key>AtlasSDKKey</key>
+<string>sdk_…</string>
+```
 
 ### 模块
 
@@ -280,13 +290,23 @@ private func pay() {
 | 主线程卡死。 | 看门狗：主队列 5 秒无应答即上报，附主线程帧，每次冻结一次。 |
 | 内存不足 kill、看门狗 kill。 | 下次启动时由该次运行的自身记录推断，仅当应用在同一次开机、同一构建下处于前台活跃状态，且无崩溃报告、无正常退出、无调试器时。 |
 | 系统看到而进程内无法看到的。 | MetricKit（iOS 14、macOS 12）：本 SDK 未上报任何内容的时间窗内的崩溃诊断，以及 CPU、磁盘写入异常。 |
+| 未捕获的 C++ 异常。 | 运行时 abort 时正在抛出的类型在处理器中读取，并在下次启动时还原：问题是 `std::runtime_error` 而不是又一个 SIGABRT，`what()` 随消息一起上报。 |
+| AppKit 在主线程吞掉的异常（macOS）。 | 钩住 `-[NSApplication reportException:]`：连同异常自身的堆栈记录为错误，再原样传递。Info.plist 中的 `AtlasCrashOnNSException` 会使其致命，那是 AppKit 自己的开关，由应用决定。 |
+| 受保护的文件描述符或 mach 端口被误用。 | mach 服务器上的 `EXC_GUARD`，按保护类型命名。 |
 
 崩溃路径全部为 C 且 async-signal-safe：不分配内存、不触及 Objective-C，内存在启动时
 预留，每行一次 `write()`。崩溃连同所有线程的帧、崩溃线程的寄存器、运行时自身的
 消息（`__crash_info`：Swift `fatalError` 的文字、`abort()` 的原因）写入磁盘，并在下次
 启动时与其会话的结束一起发送，crash-free 会话正是据此统计。每份报告携带最近 100 条
 面包屑、至多 64 个键、`AtlasCrash.log` 最新的 64 KB，以及那一刻的设备状态：剩余内存与
-磁盘、热状态与低电量模式、是否在前台。启动后 5 秒内的崩溃会在下次启动时最先发送。
+磁盘、进程自身的 footprint 与 jetsam 前剩余的余量、热状态与低电量模式、是否在前台。
+系统库的帧会在下次启动时从再次加载的同一批库中取得名字，因此在 dSYM 无能为力的地方
+也能读到 `abort` 与 `objc_msgSend`。启动后 5 秒内的崩溃会在下次启动时最先发送。
+
+SDK 也会自行留下面包屑，全部来自通知，无需任何权限：应用的 active、inactive、
+background、foreground 切换，内存警告与内核自身的内存压力级别（也会标注 OOM kill 的
+原因），方向、键盘、截屏、场景与窗口变化、热状态与低电量变化、时区与时钟变更；在
+macOS 上还有应用的隐藏与显示以及窗口变化。
 
 连接调试器时不安装原生钩子，因为 LLDB 与 mach 异常服务器无法共用一个端口；控制台会
 提示一次；已处理错误、会话与上下文照常工作。SwiftUI 预览不计为运行。

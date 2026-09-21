@@ -17,6 +17,10 @@ NS_ASSUME_NONNULL_BEGIN
                          onHang:(void (^)(NSArray *frames, NSTimeInterval stuckFor))onHang
                       onRecover:(void (^)(void))onRecover;
 
+/// Whether a stuck main thread is a hang right now: a backgrounded app is
+/// not one a user waits on. Nil means always.
+@property (nonatomic, copy, nullable) BOOL (^isLive)(void);
+
 - (void)start;
 - (void)stop;
 

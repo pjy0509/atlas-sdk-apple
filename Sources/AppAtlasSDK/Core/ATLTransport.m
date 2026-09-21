@@ -1,5 +1,42 @@
 #import "ATLTransport.h"
 
+#include <zlib.h>
+
+/// The envelope gzipped, or itself when compression fails or does not pay.
+/// A crash with a hundred threads is a tenth of its size on the wire, and
+/// the server inflates before it judges the cap.
+static NSData *ATLGzip(NSData *envelope) {
+    if (envelope.length < 512) {
+        return envelope;
+    }
+
+    z_stream stream;
+    memset(&stream, 0, sizeof(stream));
+
+    // 15 + 16: a gzip header rather than zlib's.
+    if (deflateInit2(&stream, Z_DEFAULT_COMPRESSION, Z_DEFLATED, 15 + 16, 8, Z_DEFAULT_STRATEGY) != Z_OK) {
+        return envelope;
+    }
+
+    NSMutableData *packed = [NSMutableData dataWithLength:deflateBound(&stream, (uLong) envelope.length)];
+    stream.next_in = (Bytef *) envelope.bytes;
+    stream.avail_in = (uInt) envelope.length;
+    stream.next_out = packed.mutableBytes;
+    stream.avail_out = (uInt) packed.length;
+
+    int status = deflate(&stream, Z_FINISH);
+    NSUInteger produced = stream.total_out;
+    deflateEnd(&stream);
+
+    if (status != Z_STREAM_END || produced >= envelope.length) {
+        return envelope;
+    }
+
+    packed.length = produced;
+
+    return packed;
+}
+
 @implementation ATLTransport {
     NSURL *_endpoint;
     NSString *_authorization;
@@ -33,11 +70,16 @@
         return ATLTransportVerdictRetryLater;
     }
 
+    NSData *wire = ATLGzip(envelope);
     NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:_endpoint];
     request.HTTPMethod = @"POST";
-    request.HTTPBody = envelope;
+    request.HTTPBody = wire;
     [request setValue:_authorization forHTTPHeaderField:@"Authorization"];
     [request setValue:@"application/x-atlas-envelope" forHTTPHeaderField:@"Content-Type"];
+
+    if (wire != envelope) {
+        [request setValue:@"gzip" forHTTPHeaderField:@"Content-Encoding"];
+    }
 
     // Synchronous on purpose: the worker drains one file at a time, in order.
     dispatch_semaphore_t done = dispatch_semaphore_create(0);

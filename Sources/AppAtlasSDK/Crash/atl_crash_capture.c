@@ -53,11 +53,12 @@ void atl_crash_refresh_thread_names(void) {}
 #define HANDLER_STACK_BYTES (256 * 1024)
 #define PAGE_ALIGNED __attribute__((aligned(16384)))
 
-// The five the kernel will actually deliver to a task port. EXC_CRASH and
-// EXC_RESOURCE are excluded on purpose: the kernel never hands EXC_CRASH to
-// the task that raised it, which is why the SIGABRT handler stays essential.
+// The six the kernel will actually deliver to a task port; EXC_GUARD is a
+// guarded file descriptor or mach port misused, a death of its own. EXC_CRASH
+// and EXC_RESOURCE are excluded on purpose: the kernel never hands EXC_CRASH
+// to the task that raised it, which is why the SIGABRT handler stays essential.
 #define MACH_MASK (EXC_MASK_BAD_ACCESS | EXC_MASK_BAD_INSTRUCTION | EXC_MASK_ARITHMETIC | EXC_MASK_SOFTWARE \
-                   | EXC_MASK_BREAKPOINT)
+                   | EXC_MASK_BREAKPOINT | EXC_MASK_GUARD)
 
 static const int SIGNALS[] = {SIGABRT, SIGBUS, SIGFPE, SIGILL, SIGPIPE, SIGSEGV, SIGSYS, SIGTRAP};
 #define SIGNAL_COUNT ((int) (sizeof(SIGNALS) / sizeof(SIGNALS[0])))
@@ -80,6 +81,10 @@ struct thread_name {
 
 static char report_path[MAX_PATH];
 static volatile sig_atomic_t handling;
+// libc++abi's view of the exception being thrown, resolved at install: a
+// C++ throw nobody catches ends in abort(), and by then the runtime has
+// begun catching it, so its type is still current inside the SIGABRT handler.
+static void *(*current_cxx_exception)(void);
 static volatile sig_atomic_t crashed;
 static unsigned installed_kinds;
 
@@ -680,6 +685,45 @@ static void out_crash_info(void) {
     }
 }
 
+// --- the C++ exception in flight ----------------------------------------------------------
+
+// libc++abi's std::type_info: a vtable pointer, then the mangled name. Read
+// through the kernel, since a corrupt exception object is one way to abort.
+static void out_cxx_exception(void) {
+    if (current_cxx_exception == NULL) return;
+
+    uintptr_t type_info = (uintptr_t) current_cxx_exception();
+    uintptr_t name = 0;
+
+    if (type_info == 0 || !safe_read_word(type_info + sizeof(void *), &name) || name == 0) return;
+
+    char text[MAX_TEXT];
+    size_t length = 0;
+    int ended = 0;
+
+    while (!ended && length + 64 < sizeof(text)) {
+        if (!safe_read(name + length, text + length, 64)) break;
+
+        for (size_t k = 0; k < 64; k++) {
+            if (text[length + k] == 0 || text[length + k] == '\n') {
+                length += k;
+                ended = 1;
+                break;
+            }
+        }
+
+        if (!ended) length += 64;
+    }
+
+    text[length] = 0;
+
+    if (length == 0) return;
+
+    out_str("cxxexception ");
+    out_text(text, length);
+    out_char('\n');
+}
+
 // --- the report ----------------------------------------------------------------------------------
 
 static int open_report(void) {
@@ -1053,6 +1097,8 @@ static void on_signal(int signo, siginfo_t *info, void *raw_context) {
             out_str("stackoverflow 1\n");
         }
 
+        if (signo == SIGABRT) out_cxx_exception();
+
         out_crash_info();
         out_str("thread 0 ");
         out_dec((int64_t) self_id);
@@ -1216,14 +1262,25 @@ int atl_crash_did_crash(void) {
 unsigned atl_crash_install(const char *path, unsigned wanted) {
     size_t length = path ? strlen(path) : 0;
 
-    if (installed_kinds != 0) return installed_kinds;
-    if (length == 0 || length >= sizeof(report_path)) return 0;
+    if (length == 0 || length >= sizeof(report_path)) return installed_kinds;
+
+    // Installed already (the preload, before main): only the path may move,
+    // for a caller that keeps its state somewhere else.
+    if (installed_kinds != 0) {
+        if (strcmp(report_path, path) != 0) memcpy(report_path, path, length + 1);
+
+        return installed_kinds;
+    }
+
     if (atl_crash_debugger_attached()) return 0;
 
     memcpy(report_path, path, length + 1);
 
     main_thread_port = pthread_mach_thread_np(pthread_self());
     main_thread_id = thread_id_of(main_thread_port);
+    // By name: an app that links no C++ of its own still has libc++abi
+    // loaded, but must not have to link it for us.
+    current_cxx_exception = (void *(*)(void)) dlsym(RTLD_DEFAULT, "__cxa_current_exception_type");
     cache_images();
     atl_crash_refresh_thread_names();
 

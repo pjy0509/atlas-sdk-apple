@@ -30,12 +30,12 @@ MODULES="$SOURCES/Core/*.m $SOURCES/Links/*.m $SOURCES/Crash/*.m $SOURCES/Crash/
 # The capture core is C the handlers run: every warning is a bug there.
 clang -c -Wall -Wextra -Werror -fno-omit-frame-pointer $INCLUDES "$SOURCES/Crash/atl_crash_capture.c" -o "$OUT/capture.o"
 
-clang -fobjc-arc -framework Foundation $INCLUDES $MODULES tools/ParityMain.m -o "$OUT/parity"
+clang -fobjc-arc -framework Foundation -lz $INCLUDES $MODULES tools/ParityMain.m -o "$OUT/parity"
 "$OUT/parity" "$OUT/envelopes" "$BASE"
 
 # The crash gate: a victim per way of dying, then the next start over the
 # report each one left. It refuses to run under a debugger, as the hooks do.
-clang -fobjc-arc -framework Foundation -fno-omit-frame-pointer $INCLUDES $MODULES tools/CrashGateMain.m -o "$OUT/crash-gate"
+clang -fobjc-arc -framework Foundation -fno-omit-frame-pointer $INCLUDES $MODULES tools/CrashGateMain.m tools/CrashGateCxx.mm -lc++ -lz -o "$OUT/crash-gate"
 "$OUT/crash-gate" "$OUT/envelopes" "$BASE"
 
 # The UIKit touch compiles against the device SDK it will really meet.

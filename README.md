@@ -13,7 +13,7 @@ distributed as source so a lower deployment target stays buildable.
 
 1. Open the project and choose File > Add Package Dependencies…
 2. Paste the repository address into the search field.
-3. Keep the dependency rule Up to Next Major Version, from 0.2.0.
+3. Keep the dependency rule Up to Next Major Version, from 0.3.0.
 4. Press Add Package, then add the AppAtlasSDK product to the app target.
 
 ```
@@ -23,7 +23,7 @@ https://github.com/pjy0509/atlas-sdk-apple.git
 #### Package.swift
 
 ```swift
-.package(url: "https://github.com/pjy0509/atlas-sdk-apple.git", from: "0.2.0")
+.package(url: "https://github.com/pjy0509/atlas-sdk-apple.git", from: "0.3.0")
 ```
 
 #### Podfile
@@ -72,6 +72,18 @@ func application(_ application: UIApplication,
 }
 ```
 <!-- tabs:end -->
+
+Or no code at all: name the key in the Info.plist, and the SDK starts itself.
+The native crash hooks go in before `main` runs, from a library initializer, so a
+crash in the app's own startup is already caught; the rest starts on the main
+queue's first turn. An app that also calls `Atlas.start` loses nothing, a second
+start is a no-op. `AtlasBaseURL` overrides the server.
+
+```xml title="Info.plist"
+<!-- Info.plist -->
+<key>AtlasSDKKey</key>
+<string>sdk_…</string>
+```
 
 ### Modules
 
@@ -286,6 +298,9 @@ What is caught, with no call beyond `Atlas.start`:
 | A main-thread hang. | A watchdog: five seconds without an answer from the main queue, reported with the main thread's frames, once per freeze. |
 | An out-of-memory kill, a watchdog kill. | Inferred at the next start from the run's own record, only when the app was active in the foreground on the same boot and build, with no crash report, no clean exit and no debugger. |
 | What the OS saw and nothing in-process could. | MetricKit (iOS 14, macOS 12): crash diagnostics for a window this SDK reported nothing in, CPU and disk-write exceptions. |
+| An uncaught C++ exception. | The type in flight when the runtime aborts is read in the handler and demangled at the next start: the issue is `std::runtime_error`, not another SIGABRT, and `what()` rides the message. |
+| An exception AppKit caught on the main thread (macOS). | `-[NSApplication reportException:]`, hooked: recorded as an error with the exception's own stack, then passed through. `AtlasCrashOnNSException` in the Info.plist makes them fatal instead, which is AppKit's own switch and a choice the app makes. |
+| A guarded file descriptor or mach port misused. | `EXC_GUARD` on the mach server, named by guard type. |
 
 Everything on the crash path is C and async-signal-safe: no allocation, no
 Objective-C, memory reserved at start, one `write()` per line. A crash is
@@ -295,8 +310,20 @@ the reason of an `abort()`), and sent at the next start together with the end
 of its session, which is what crash-free sessions are counted from. Every
 report carries the last 100 breadcrumbs, up to 64 keys, the newest 64 KB of
 `AtlasCrash.log` lines, and the device's state at that moment: free memory
-and disk, thermal and low-power state, whether it was in the foreground. A
-crash within five seconds of start is sent first thing at the next start.
+and disk, the process's own footprint and how much more jetsam would allow,
+thermal and low-power state, whether it was in the foreground. The frames of
+the system's own libraries are named at the next start, from the same
+libraries loaded again, so a report reads `abort` and `objc_msgSend` where a
+dSYM could never help. A crash within five seconds of start is sent first
+thing at the next start.
+
+Breadcrumbs the SDK leaves on its own, all from notifications and none
+needing a permission: the app going active, inactive, background and
+foreground, memory warnings and the kernel's own memory-pressure levels
+(which also name the reason of an out-of-memory kill), orientation, the
+keyboard, screenshots, scene and window changes, thermal and low-power
+changes, time-zone and clock changes; on macOS the app hiding and showing and
+its windows changing.
 
 Under a debugger the native hooks stay uninstalled, because LLDB and a mach
 exception server cannot share a port, and the console says so once. Handled

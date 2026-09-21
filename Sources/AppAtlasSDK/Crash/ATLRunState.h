@@ -33,7 +33,15 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)setActive:(BOOL)active;
 - (void)setForeground:(BOOL)foreground;
 - (void)setHanging:(BOOL)hanging frames:(nullable NSArray *)frames;
+- (void)setMemoryPressure:(NSString *)level;
 - (void)noteCleanExit;
+
+/// Whether the app is on screen, per its own notifications so far.
+@property (nonatomic, readonly) BOOL isForeground;
+
+/// The memory pressure the previous run last saw, when it was killed and
+/// had seen any: `warn`, `critical`, `warning` (UIKit's). Nil otherwise.
+- (nullable NSString *)previousMemoryPressure;
 
 /// Persists now, atomically. Off the main thread where it can be.
 - (void)persist;
@@ -45,6 +53,7 @@ NS_ASSUME_NONNULL_BEGIN
 + (BOOL)isSimulator;
 + (BOOL)isExtension;
 + (BOOL)isPreview;
++ (BOOL)isTesting;
 + (BOOL)isPrewarmed;
 + (BOOL)isTestFlight;
 + (NSString *)executableUUID;
