@@ -134,12 +134,15 @@ static int runChild(NSArray<NSString *> *arguments, NSString *home) {
     for (char **cursor = environ; *cursor; cursor++) {
         NSString *pair = [NSString stringWithUTF8String:*cursor];
 
-        if (![pair hasPrefix:@"HOME="]) {
+        if (![pair hasPrefix:@"HOME="] && ![pair hasPrefix:@"CFFIXED_USER_HOME="]) {
             [env addObject:pair];
         }
     }
 
+    // Both: the shell reads HOME, Foundation's search paths read the
+    // fixed home first and the password file second, HOME last.
     [env addObject:[@"HOME=" stringByAppendingString:home]];
+    [env addObject:[@"CFFIXED_USER_HOME=" stringByAppendingString:home]];
     char **envp = calloc(env.count + 1, sizeof(char *));
 
     for (NSUInteger i = 0; i < env.count; i++) {
@@ -326,8 +329,28 @@ static NSArray<NSDictionary *> *itemsOfEnvelope(NSData *bytes) {
     return items;
 }
 
+static NSString *queueOf(NSString *home) {
+    return [home stringByAppendingPathComponent:@"Library/Caches/atlas/queue"];
+}
+
+/// What a failure needs to say: every item's type, mechanism and status.
+static NSString *describeItems(NSArray<NSDictionary *> *items, NSString *home) {
+    NSMutableArray *lines = [NSMutableArray array];
+
+    for (NSDictionary *item in items) {
+        NSDictionary *payload = item[@"payload"];
+        [lines addObject:[NSString stringWithFormat:@"%@(%@)", item[@"type"],
+                          payload[@"mechanism"][@"type"] ?: payload[@"status"] ?: @"-"]];
+    }
+
+    NSArray *files = [[NSFileManager defaultManager] contentsOfDirectoryAtPath:queueOf(home) error:NULL];
+
+    return [NSString stringWithFormat:@"%lu files in %@, items: %@", (unsigned long) files.count, queueOf(home),
+            lines.count > 0 ? [lines componentsJoinedByString:@" "] : @"none"];
+}
+
 static NSArray<NSDictionary *> *queuedItems(NSString *home) {
-    NSString *queue = [home stringByAppendingPathComponent:@"Library/Caches/atlas/queue"];
+    NSString *queue = queueOf(home);
     NSMutableArray *all = [NSMutableArray array];
 
     for (NSString *name in [[[NSFileManager defaultManager] contentsOfDirectoryAtPath:queue error:NULL] sortedArrayUsingSelector:@selector(compare:)]) {
@@ -378,7 +401,7 @@ static void checkNextStart(NSString *outDir) {
 
     NSArray *items = queuedItems(home);
     NSDictionary *crash = firstItem(items, @"crash", ATLMechanismMach);
-    require(crash != nil, @"next: no crash item was queued");
+    require(crash != nil, [NSString stringWithFormat:@"next: no crash item was queued (%@)", describeItems(items, home)]);
     require([crash[@"user"][@"id"] isEqualToString:@"u-gate"], @"next: the dead run's scope did not ride the crash");
     require([crash[@"keys"][@"mode"] isEqualToString:@"segv"], @"next: keys lost");
     require([crash[@"sessionId"] length] > 0, @"next: the dead session is not named");
@@ -406,7 +429,7 @@ static void checkNextStart(NSString *outDir) {
 
     items = queuedItems(home);
     NSDictionary *kill = firstItem(items, @"crash", ATLMechanismExitInfo);
-    require(kill != nil, @"oom: no kill was inferred");
+    require(kill != nil, [NSString stringWithFormat:@"oom: no kill was inferred (%@)", describeItems(items, home)]);
     require([[kill[@"exceptions"] firstObject][@"type"] isEqualToString:@"OutOfMemory"],
             [NSString stringWithFormat:@"oom: type %@", [kill[@"exceptions"] firstObject][@"type"]]);
     require(sessionWithStatus(items, @"abnormal") != nil, @"oom: the session's abnormal end is missing");
