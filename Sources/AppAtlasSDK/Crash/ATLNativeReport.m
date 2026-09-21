@@ -339,10 +339,11 @@ static char *(*ATLDemangle)(const char *, char *, size_t *, int *);
         return name;
     }
 
-    // A type_info name has no _Z prefix; the demangler wants one.
-    const char *mangled = [name hasPrefix:@"_Z"] ? name.UTF8String : [@"_Z" stringByAppendingString:name].UTF8String;
+    // A type_info name has no _Z prefix; the demangler wants one. Held in a
+    // local, because a temporary's UTF8String dies with the temporary.
+    NSString *mangled = [name hasPrefix:@"_Z"] ? name : [@"_Z" stringByAppendingString:name];
     int status = -1;
-    char *readable = ATLDemangle(mangled, NULL, NULL, &status);
+    char *readable = ATLDemangle(mangled.UTF8String, NULL, NULL, &status);
     NSString *result = status == 0 && readable != NULL ? [NSString stringWithUTF8String:readable] : name;
 
     if (readable != NULL) {

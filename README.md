@@ -33,6 +33,10 @@ pod 'AppAtlasSDK'          # Links and Crash (pull Core)
 pod 'AppAtlasSDK/Links'    # one module alone
 pod 'AppAtlasSDK/Core'     # the transport half alone
 ```
+
+Swift reads it as a module either way: `import AppAtlasSDK` needs no
+`use_frameworks!` and no `use_modular_headers!` in the Podfile.
+
 <!-- tabs:end -->
 
 <!-- guide:start -->

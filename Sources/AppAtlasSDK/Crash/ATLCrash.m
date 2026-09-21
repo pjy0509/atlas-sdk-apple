@@ -22,8 +22,10 @@
 // Info.plist keys: the start nobody has to write, and AppKit's one switch.
 static NSString *const ATLPlistKey = @"AtlasSDKKey";
 static NSString *const ATLPlistBaseURL = @"AtlasBaseURL";
+#if TARGET_OS_OSX
 static NSString *const ATLPlistCrashOnNSException = @"AtlasCrashOnNSException";
 static NSString *const ATLMechanismAppKitReported = @"nsApplicationReportException";
+#endif
 
 static NSString *const ATLEnabledKey = @"dev.appatlas.sdk.crash.enabled";
 // The C core writes here; read and cleared at the next start.
@@ -45,9 +47,10 @@ static dispatch_queue_t ATLSnapshots = nil;
 static BOOL ATLSnapshotPending = NO;
 static NSUncaughtExceptionHandler *ATLPreviousExceptionHandler = NULL;
 static dispatch_source_t ATLMemoryPressure = nil;
-static IMP ATLOriginalReportException = NULL;
 
 #if TARGET_OS_OSX
+static IMP ATLOriginalReportException = NULL;
+
 static void ATLReportException(id self, SEL _cmd, NSException *exception);
 #endif
 
@@ -334,7 +337,10 @@ __attribute__((constructor)) static void ATLCrashPreload(void) {
             [self leaveAutoBreadcrumb:@"device.thermal" message:[ATLRunState facts][@"thermalState"] ?: @"changed"];
         },
         @"NSProcessInfoPowerStateDidChangeNotification": ^(NSNotification *note) {
-            [self leaveAutoBreadcrumb:@"device.power" message:[NSProcessInfo processInfo].isLowPowerModeEnabled ? @"low power on" : @"low power off"];
+            if (@available(iOS 9.0, macOS 12.0, *)) {
+                [self leaveAutoBreadcrumb:@"device.power"
+                                  message:[NSProcessInfo processInfo].isLowPowerModeEnabled ? @"low power on" : @"low power off"];
+            }
         },
         @"NSSystemTimeZoneDidChangeNotification": ^(NSNotification *note) { [self leaveAutoBreadcrumb:@"system" message:@"time zone changed"]; },
         @"NSSystemClockDidChangeNotification": ^(NSNotification *note) { [self leaveAutoBreadcrumb:@"system" message:@"clock changed"]; },

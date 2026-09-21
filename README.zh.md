@@ -33,6 +33,10 @@ pod 'AppAtlasSDK'          # Links 与 Crash（会一并引入 Core）
 pod 'AppAtlasSDK/Links'    # 仅一个模块
 pod 'AppAtlasSDK/Core'     # 仅传输那一半
 ```
+
+Swift 两种集成方式都按模块读取：`import AppAtlasSDK` 不需要在 Podfile 中
+写 `use_frameworks!` 或 `use_modular_headers!`。
+
 <!-- tabs:end -->
 
 <!-- guide:start -->

@@ -25,6 +25,14 @@ Pod::Spec.new do |s|
   s.requires_arc     = true
   s.frameworks       = 'Foundation'
   s.libraries        = 'z'
+
+  # Swift reads this as a module in every integration, not only under
+  # use_frameworks!. A pod's own DEFINES_MODULE is what CocoaPods weighs last
+  # when it decides to write the module map (Target#defines_module?), so
+  # `import AppAtlasSDK` asks nothing of the app's Podfile. Every public
+  # header imports Foundation and its siblings only, which is what a module
+  # map needs from them.
+  s.pod_target_xcconfig = { 'DEFINES_MODULE' => 'YES' }
   s.resource_bundles = { 'AppAtlasSDK' => ['Sources/AppAtlasSDK/PrivacyInfo.xcprivacy'] }
 
   s.default_subspecs = 'Links', 'Crash'

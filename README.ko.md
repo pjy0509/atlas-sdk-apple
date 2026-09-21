@@ -33,6 +33,10 @@ pod 'AppAtlasSDK'          # Links와 Crash (Core를 함께 가져옵니다)
 pod 'AppAtlasSDK/Links'    # 모듈 하나만
 pod 'AppAtlasSDK/Core'     # 전송 반쪽만
 ```
+
+Swift에서는 어느 쪽으로 붙여도 모듈로 읽습니다. `import AppAtlasSDK`에
+`use_frameworks!`도 `use_modular_headers!`도 필요하지 않습니다.
+
 <!-- tabs:end -->
 
 <!-- guide:start -->
