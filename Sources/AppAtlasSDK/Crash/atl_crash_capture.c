@@ -101,7 +101,10 @@ static struct sigaction previous_actions[SIGNAL_COUNT];
 static char signal_installed[SIGNAL_COUNT];
 static unsigned char alt_stack[ALT_STACK_BYTES] PAGE_ALIGNED;
 
-// The mach side.
+// The mach side. Packed to four bytes as MIG packs its own: the 64-bit
+// codes follow the count with no padding on the wire, and a naturally
+// aligned struct would read them four bytes off, the fault address included.
+#pragma pack(push, 4)
 typedef struct {
     mach_msg_header_t header;
     mach_msg_body_t body;
@@ -119,6 +122,7 @@ typedef struct {
     NDR_record_t NDR;
     kern_return_t return_code;
 } atl_mach_reply_t;
+#pragma pack(pop)
 
 struct saved_ports {
     exception_mask_t masks[EXC_TYPES_COUNT];
