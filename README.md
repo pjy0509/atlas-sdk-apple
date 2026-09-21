@@ -73,7 +73,7 @@ func application(_ application: UIApplication,
 ```
 <!-- tabs:end -->
 
-Or no code at all: name the key in the Info.plist, and the SDK starts itself.
+The key may also be declared in the Info.plist, and the SDK starts itself.
 The native crash hooks go in before `main` runs, from a library initializer, so a
 crash in the app's own startup is already caught; the rest starts on the main
 queue's first turn. An app that also calls `Atlas.start` loses nothing, a second

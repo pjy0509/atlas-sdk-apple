@@ -72,7 +72,7 @@ func application(_ application: UIApplication,
 ```
 <!-- tabs:end -->
 
-也可以不写代码：把密钥写进 Info.plist，SDK 会自行启动。原生崩溃钩子由库初始化器
+密钥也可以在 Info.plist 中声明，SDK 随之自行启动。原生崩溃钩子由库初始化器
 在 `main` 之前装入，应用自身启动过程中的崩溃也已被捕获；其余部分在主队列的第一轮启动。
 同时调用 `Atlas.start` 也不会有损失，第二次启动是空操作。`AtlasBaseURL` 覆盖服务器。
 
