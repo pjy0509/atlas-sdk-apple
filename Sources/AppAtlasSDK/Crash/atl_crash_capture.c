@@ -743,8 +743,16 @@ static void out_head(void) {
     struct timespec now = {0, 0};
     clock_gettime(CLOCK_REALTIME, &now);
 
+    // To the millisecond: the time to crash is measured from a start the
+    // run state keeps in fractions, and whole seconds would lose up to one.
+    int millis = (int) (now.tv_nsec / 1000000);
+
     out_str("atlas-apple-crash 1\ntime ");
     out_dec((int64_t) now.tv_sec);
+    out_char('.');
+    out_char((char) ('0' + millis / 100));
+    out_char((char) ('0' + millis / 10 % 10));
+    out_char((char) ('0' + millis % 10));
     out_str("\npid ");
     out_dec(getpid());
     out_char('\n');

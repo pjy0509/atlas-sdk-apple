@@ -104,7 +104,8 @@ static int victim(NSString *mode, NSString *stateDir, NSString *baseUrl) {
         // Lives, and leaves a run state that says it was active: the parent
         // then boots on it to see an out-of-memory kill inferred.
         [[NSNotificationCenter defaultCenter] postNotificationName:@"NSApplicationDidBecomeActiveNotification" object:nil];
-        [NSThread sleepForTimeInterval:1.3];
+        // The run state reaches disk a second after the notification.
+        [NSThread sleepForTimeInterval:2.0];
         [[Atlas core] awaitIdle];
         _exit(0);
     }
@@ -259,7 +260,11 @@ static void checkCapture(NSString *outDir, NSString *baseUrl) {
                     [NSString stringWithFormat:@"trap: type %@", type]);
         }
 
-        require([payload[@"context"][@"registers"] length] > 0, [NSString stringWithFormat:@"%@: registers missing", mode]);
+        // An NSException is recorded from its own return addresses, in a
+        // process still running: there is no faulting register state to keep.
+        if (![mode isEqualToString:@"nsexception"]) {
+            require([payload[@"context"][@"registers"] length] > 0, [NSString stringWithFormat:@"%@: registers missing", mode]);
+        }
 
         // The scope the victim set reached disk before it died.
         NSDictionary *scope = [ATLCrashScope readFrom:[stateDir stringByAppendingPathComponent:@"crash-scope.json"]];
