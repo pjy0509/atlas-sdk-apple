@@ -43,6 +43,8 @@ static ATLRunState *ATLRun = nil;
 static ATLHangWatchdog *ATLWatchdog = nil;
 static ATLMetricKitBridge *ATLMetricKit = nil;
 static NSString *ATLScopePath = nil;
+// Set before the start when the caller wants the state somewhere of its own.
+static NSString *ATLStateDirectory = nil;
 static dispatch_queue_t ATLSnapshots = nil;
 static BOOL ATLSnapshotPending = NO;
 static NSUncaughtExceptionHandler *ATLPreviousExceptionHandler = NULL;
@@ -91,6 +93,7 @@ static void ATLHandleUncaughtException(NSException *exception) {
 
 + (void)bootWithStateDirectory:(NSString *)directory;
 + (NSString *)stateDirectory;
++ (void)setStateDirectory:(NSString *)directory;
 + (void)leaveAutoBreadcrumb:(NSString *)category message:(NSString *)message;
 
 @end
@@ -143,7 +146,22 @@ __attribute__((constructor)) static void ATLCrashPreload(void) {
     }
 }
 
+/// Where the crash state lives. Set before Atlas.start, it decides where
+/// this run writes; the gate is the only caller, since an app has no reason
+/// to move it.
++ (void)setStateDirectory:(NSString *)directory {
+    @synchronized (self) {
+        ATLStateDirectory = [directory copy];
+    }
+}
+
 + (NSString *)stateDirectory {
+    @synchronized (self) {
+        if (ATLStateDirectory != nil) {
+            return ATLStateDirectory;
+        }
+    }
+
     NSString *support = NSSearchPathForDirectoriesInDomains(NSApplicationSupportDirectory, NSUserDomainMask, YES).firstObject
         ?: NSTemporaryDirectory();
 

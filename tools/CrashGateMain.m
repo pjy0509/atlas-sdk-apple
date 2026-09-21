@@ -29,6 +29,7 @@ extern char **environ;
 // public surface stays exactly the public surface.
 @interface ATLCrash (Gate)
 + (void)bootWithStateDirectory:(NSString *)directory;
++ (void)setStateDirectory:(NSString *)directory;
 @end
 
 static void require(BOOL held, NSString *complaint) {
@@ -57,8 +58,8 @@ static int overflow(int depth) {
 }
 
 static int victim(NSString *mode, NSString *stateDir, NSString *baseUrl) {
+    [ATLCrash setStateDirectory:stateDir];
     [Atlas startWithKey:@"sdk_gate" baseUrl:baseUrl];
-    [ATLCrash bootWithStateDirectory:stateDir];
     [ATLCrash setUserId:@"u-gate"];
     [ATLCrash setKey:@"mode" value:mode];
     [ATLCrash leaveBreadcrumb:@"gate" message:@"about to die"];
@@ -208,14 +209,19 @@ static void checkCapture(NSString *outDir, NSString *baseUrl) {
         require(ownFrame, [NSString stringWithFormat:@"%@: no frame in the gate binary itself", mode]);
 
         // The system's frames are named at the next start, from the same
-        // libraries loaded again: a reader sees abort(), not an offset.
-        BOOL named = NO;
+        // libraries loaded again: a reader sees abort(), not an offset. Only
+        // the deaths that go through a system library have one to name; a
+        // bad access walks the app's own frames and stops at dyld, which is
+        // in no image list.
+        if ([mode isEqualToString:@"abrt"] || [mode isEqualToString:@"cxx"]) {
+            BOOL named = NO;
 
-        for (NSDictionary *frame in frames) {
-            if ([frame[@"image"] hasPrefix:@"/usr/lib/"] && ![frame[@"function"] hasPrefix:@"0x"]) named = YES;
+            for (NSDictionary *frame in frames) {
+                if ([frame[@"image"] hasPrefix:@"/usr/lib/"] && ![frame[@"function"] hasPrefix:@"0x"]) named = YES;
+            }
+
+            require(named, [NSString stringWithFormat:@"%@: no system frame was named", mode]);
         }
-
-        require(named, [NSString stringWithFormat:@"%@: no system frame was named", mode]);
 
         if ([mode isEqualToString:@"segv"] || [mode isEqualToString:@"thread"] || [mode isEqualToString:@"stackoverflow"]) {
             require([mechanism isEqualToString:ATLMechanismMach], [NSString stringWithFormat:@"%@: a fault must come through mach, got %@", mode, mechanism]);
@@ -417,8 +423,8 @@ static void checkNextStart(NSString *outDir) {
 }
 
 static int bootChild(NSString *stateDir, NSString *baseUrl) {
+    [ATLCrash setStateDirectory:stateDir];
     [Atlas startWithKey:@"sdk_gate" baseUrl:baseUrl];
-    [ATLCrash bootWithStateDirectory:stateDir];
     // The deaths thread runs on its own; give it its moment, then the worker.
     [NSThread sleepForTimeInterval:1.5];
     [[Atlas core] awaitIdle];
