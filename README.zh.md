@@ -326,23 +326,74 @@ macOS 上还有应用的隐藏与显示以及窗口变化。
 
 ### 可读的堆栈跟踪（dSYM）
 
-原生帧以镜像的 UUID 加相对镜像的地址上报，这正是其 dSYM 所解析的内容。上传每个构建
-dSYM 内的 DWARF 文件（应用与每个框架的），服务器即可还原函数、文件与行号，包括内联帧。
-UUID 从文件中读取，因此只需上传文件。在发布触达用户之前上传：按地址分组的崩溃会作为
-单独的问题留存。
+原生帧以镜像的 UUID 加镜像内相对地址上报，而 dSYM 解析的正是这些。格式与 UUID 都由
+服务器从文件读取，因此只需上传文件。
+
+要找的是 `<App>.app.dSYM` 文件夹。它在哪，取决于发生崩溃的构建来自何处。
+
+| 构建 | 如何找到它的 dSYM | 说明 |
+| --- | --- | --- |
+| 归档 | `find ~/Library/Developer/Xcode/Archives -name '*.dSYM' -newermt '-30 days'` | 应用与各框架的 dSYM 一起放在归档包内的 `dSYMs/` 文件夹中。Xcode Organizer，右键归档，Show in Finder，显示包内容，进入的是同一个文件夹 |
+| App Store 或 TestFlight 构建 | 在 Organizer 中选中该归档，Download Debug Symbols。下载到的 dSYM 会并入同一归档的 `dSYMs/`，因此上面的 `find` 同样能找到 | 由 App Store Connect 重新编译，UUID 与归档中的不同。触达用户的那个构建的崩溃只有它能解析 |
+| 直接从 Xcode 运行的构建 | `find ~/Library/Developer/Xcode/DerivedData -name '*.dSYM' -newermt '-7 days'` | 开发时看到的崩溃由它解析。只有当 `DEBUG_INFORMATION_FORMAT` 为 `dwarf-with-dsym` 时才会生成；Xcode 的 Debug 默认值是 `dwarf`，不会生成。即使有，**下一次构建也会覆盖它**：每次构建都会产生新的 UUID，再构建一次之后，那次崩溃的 dSYM 就哪里都没有了 |
+
+按 UUID 找到正确的文件。崩溃详情的“符号”表会列出缺少文件的每个镜像的 id，该 id 就是
+`dwarfdump --uuid` 打印的值去掉连字符并转为小写。以下命令遍历这台 Mac 上的所有 dSYM，
+只打印携带这些 UUID 的那些；打印出的每一行就是要上传的文件。
+
+```sh
+find ~/Library/Developer -name '*.dSYM' -exec dwarfdump --uuid {} + \
+  | grep -iE '<UUID>|<UUID>'
+```
+
+没有输出，说明该构建的 dSYM 不在这台 Mac 上。回到上表查看该构建来自哪里。
+
+对找到的那个 dSYM 单独运行 `dwarfdump --uuid`：输出多于一行说明包含多个架构，而只有
+第一个能解析。请先瘦身：`lipo -thin arm64 <dwarf> -output <dwarf>-arm64`
+
+帧中出现的每个镜像各需要一个：应用，以及每个拥有自身 UUID 的动态框架。静态库被链接
+进应用二进制，已包含在应用的 dSYM 中。系统框架会被过滤，无需上传。
+
+最快的方式是仪表盘：打开帧无法读取的崩溃，把找到的 `.dSYM` 文件夹直接拖到其中的
+“符号”框，框会取出其中的二进制。整个 `dSYMs` 文件夹拖入时，会为每个镜像各上传一个。
+它以会话认证，无需令牌；只有当该应用没有任何调试文件时才会出现。
+
+API 不接受文件夹。它读取的是其中的 Mach-O 二进制，每个镜像一个：
+
+```
+<App>.app.dSYM/Contents/Resources/DWARF/<App>
+```
+
+请在版本触达用户前上传。晚到的文件也不会白费：已存储的崩溃会用它重新读取，并按
+可读的名称重新归组。为同一构建上传不同的文件会替换在册的那份。
+
+要让开发期间看到的崩溃也能解析，就每次构建都上传。Xcode 的 Run Script 阶段正是这个
+位置，与 Crashlytics 获取 dSYM 的方式相同：在 Build Phases 中于最末尾添加 New Run
+Script Phase，并在 Debug 配置上启用 `DEBUG_INFORMATION_FORMAT = dwarf-with-dsym`。
+
+```sh title="Run Script (Build Phases)"
+# 每次构建，本次构建产生的全部 dSYM（应用的和每个框架的）。
+# 令牌通过 xcconfig 或用户自定义构建设置 ATLAS_API_TOKEN 提供。
+[ "$DEBUG_INFORMATION_FORMAT" = "dwarf-with-dsym" ] || exit 0
+for dwarf in "$DWARF_DSYM_FOLDER_PATH"/*.dSYM/Contents/Resources/DWARF/*; do
+  curl --fail -s -X POST \
+    "https://appatlas.dev/api/ingest/symbols?store=app-store&appId=$PRODUCT_BUNDLE_IDENTIFIER" \
+    -H "Authorization: Bearer $ATLAS_API_TOKEN" \
+    --data-binary "@$dwarf" || true
+done
+```
 
 ```sh title="upload-dsyms.sh"
-# CI，归档之后：归档中的每个 dSYM 各调用一次（应用与各框架）。
-# ATLAS_API_TOKEN 是 App Atlas API 访问令牌，绝不是 SDK 密钥。
+# CI，归档之后：归档中每个 dSYM 一次（应用的和每个框架的）。
+# ATLAS_API_TOKEN 是策略中带有“上传构建符号”的 App Atlas API 访问令牌，
+# 而不是 SDK 密钥。
 for dwarf in "$ARCHIVE_PATH"/dSYMs/*.dSYM/Contents/Resources/DWARF/*; do
   curl --fail -X POST \
-    "https://appatlas.dev/api/ingest/symbols?store=app-store&appId=$BUNDLE_ID&kind=macho" \
+    "https://appatlas.dev/api/ingest/symbols?store=app-store&appId=$BUNDLE_ID" \
     -H "Authorization: Bearer $ATLAS_API_TOKEN" \
     --data-binary "@$dwarf"
 done
 ```
-
-经 bitcode 重新编译的构建，其 dSYM 在处理完成后从 App Store Connect 获取，以同样方式上传。
 
 ## 隐私
 

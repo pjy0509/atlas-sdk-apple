@@ -346,25 +346,86 @@ ended in a crash, a hang kill or an out-of-memory kill.
 ### Readable stack traces (dSYM)
 
 A native frame is reported as the image's UUID plus an address relative to the
-image, which is exactly what its dSYM resolves. Upload the DWARF file inside
-each build's dSYM, the app's and every framework's, and the server resolves
-function, file and line, inlined frames included. The UUID is read from the
-file, so only the file is needed. Upload before the release reaches users: a
-crash grouped by address stays a separate issue.
+image, which is exactly what its dSYM resolves. The format and the UUID are both
+read from the file, so only the file is needed.
+
+What you are looking for is an `<App>.app.dSYM` folder. Where it is depends on
+where the build that crashed came from.
+
+| Build | How to find its dSYM | Notes |
+| --- | --- | --- |
+| An archive | `find ~/Library/Developer/Xcode/Archives -name '*.dSYM' -newermt '-30 days'` | They sit together in the archive package's `dSYMs/` folder, the app's and each framework's. Organizer, right-click the archive, Show in Finder, Show Package Contents lands in the same folder |
+| App Store or TestFlight | Organizer, select that archive, Download Debug Symbols. What arrives is added to the same archive's `dSYMs/`, so the `find` above picks it up | App Store Connect rebuilt it, so its UUIDs are not the archive's. Only these read the crashes from the build that reached users |
+| Run straight from Xcode | `find ~/Library/Developer/Xcode/DerivedData -name '*.dSYM' -newermt '-7 days'` | The one that reads the crashes you see while developing. It exists only when `DEBUG_INFORMATION_FORMAT` is `dwarf-with-dsym`; Xcode's Debug default is `dwarf`, which leaves none. Even then **the next build overwrites it**: every build gets a new UUID, so after one more build that crash's dSYM is nowhere |
+
+The right file is found by its UUID. The crash's Symbols table shows the id of
+each image that has none, and that id is what `dwarfdump --uuid` prints,
+lowercased with the dashes removed. This walks every dSYM on the Mac and prints
+only the ones carrying those UUIDs; each line printed is a file to upload.
+
+```sh
+find ~/Library/Developer -name '*.dSYM' -exec dwarfdump --uuid {} + \
+  | grep -iE '<UUID>|<UUID>'
+```
+
+Nothing printed means that build's dSYM is not on this Mac. Go back to the
+table above for where the build came from.
+
+Run `dwarfdump --uuid` on the one dSYM it found: more than one line means
+more than one architecture, and only the first one resolves. Thin it first:
+`lipo -thin arm64 <dwarf> -output <dwarf>-arm64`.
+
+One is needed per image that appears in frames: the app, plus every dynamic
+framework with a UUID of its own. A static library is linked into the app binary
+and is covered by the app's dSYM. System frameworks are filtered out and need
+nothing.
+
+The short way is the dashboard: open a crash whose frames came out unreadable
+and drop the `.dSYM` folder you found on the Symbols box, which goes in after
+the binary itself. Dropping a whole `dSYMs` folder uploads one per image. The
+session authenticates it, so no token is involved, and the box is there only
+while the app has no debug file at all.
+
+The API takes no folder. What it reads is the Mach-O binary inside, one per
+image:
+
+```
+<App>.app.dSYM/Contents/Resources/DWARF/<App>
+```
+
+Upload before the release reaches users. A file that arrives later is not
+wasted: the crashes already stored are read again with it and refiled under
+names that can be read. Uploading a different file for the same build replaces
+what is on record.
+
+For crashes seen while developing to resolve, upload on every build. Xcode's
+Run Script phase is the place, the same way Crashlytics takes its dSYMs: in
+Build Phases add a New Run Script Phase at the very end, and set
+`DEBUG_INFORMATION_FORMAT = dwarf-with-dsym` on the Debug configuration.
+
+```sh title="Run Script (Build Phases)"
+# Every build, every dSYM this build produced (the app's and each framework's).
+# The token comes from an xcconfig or a user-defined build setting ATLAS_API_TOKEN.
+[ "$DEBUG_INFORMATION_FORMAT" = "dwarf-with-dsym" ] || exit 0
+for dwarf in "$DWARF_DSYM_FOLDER_PATH"/*.dSYM/Contents/Resources/DWARF/*; do
+  curl --fail -s -X POST \
+    "https://appatlas.dev/api/ingest/symbols?store=app-store&appId=$PRODUCT_BUNDLE_IDENTIFIER" \
+    -H "Authorization: Bearer $ATLAS_API_TOKEN" \
+    --data-binary "@$dwarf" || true
+done
+```
 
 ```sh title="upload-dsyms.sh"
 # CI, after archiving: one call per dSYM in the archive (the app's and each framework's).
-# ATLAS_API_TOKEN is an App Atlas API access token, never the SDK key.
+# ATLAS_API_TOKEN is an App Atlas API access token whose policy carries
+# Upload build symbols, never the SDK key.
 for dwarf in "$ARCHIVE_PATH"/dSYMs/*.dSYM/Contents/Resources/DWARF/*; do
   curl --fail -X POST \
-    "https://appatlas.dev/api/ingest/symbols?store=app-store&appId=$BUNDLE_ID&kind=macho" \
+    "https://appatlas.dev/api/ingest/symbols?store=app-store&appId=$BUNDLE_ID" \
     -H "Authorization: Bearer $ATLAS_API_TOKEN" \
     --data-binary "@$dwarf"
 done
 ```
-
-Bitcode-recompiled builds get their dSYMs from App Store Connect after
-processing; upload those the same way.
 
 ## Privacy
 

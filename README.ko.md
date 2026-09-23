@@ -338,25 +338,81 @@ kill로 끝났는지 알려 줍니다.
 ### 읽을 수 있는 스택 트레이스 (dSYM)
 
 네이티브 프레임은 이미지의 UUID와 이미지 상대 주소로 보고됩니다. 그 dSYM이 푸는
-것이 정확히 그것입니다. 빌드마다 dSYM 안의 DWARF 파일을 올리면 서버가 함수,
-파일, 행으로 복원합니다. 앱과 모든 프레임워크의 것을 같이 올립니다.
-인라인된 프레임까지입니다.
-UUID는 파일에서 읽으므로 파일만 올리면 됩니다. 릴리스가 사용자에게 닿기 전에
-올립니다. 주소로 묶인 크래시는 별개의 이슈로 남습니다.
+것이 정확히 그것입니다. 형식도 UUID도 파일에서 읽으므로 파일만 올리면 됩니다.
+
+찾을 것은 `<App>.app.dSYM` 폴더입니다. 어디에 있는지는 그 크래시를 낸 빌드가
+어디서 왔는지에 따라 다릅니다.
+
+| 빌드 | dSYM 찾는 법 | 비고 |
+| --- | --- | --- |
+| 아카이브 | `find ~/Library/Developer/Xcode/Archives -name '*.dSYM' -newermt '-30 days'` | 아카이브 패키지 안 `dSYMs/` 폴더에 앱과 프레임워크 것이 함께 들어 있습니다. Organizer에서 아카이브 우클릭, Show in Finder, 패키지 내용 보기도 같은 폴더입니다 |
+| App Store · TestFlight 배포본 | Organizer에서 그 아카이브를 골라 Download Debug Symbols. 받은 dSYM은 같은 아카이브의 `dSYMs/`에 더해지므로 위 `find`로 다시 잡힙니다 | App Store Connect가 다시 빌드하므로 UUID가 아카이브의 것과 다릅니다. 사용자에게 나간 빌드의 크래시는 이쪽만 풉니다 |
+| Xcode에서 바로 돌린 빌드 | `find ~/Library/Developer/Xcode/DerivedData -name '*.dSYM' -newermt '-7 days'` | 개발 중에 보는 크래시를 푸는 쪽입니다. `DEBUG_INFORMATION_FORMAT`이 `dwarf-with-dsym`일 때만 생기고, Xcode의 Debug 기본값은 `dwarf`라 없습니다. 있어도 **다음 빌드가 덮어씁니다**. 빌드마다 UUID가 새로 나오므로, 한 번 더 빌드한 뒤에는 그 크래시의 dSYM은 어디에도 없습니다 |
+
+맞는 파일은 UUID로 찾습니다. 크래시 상세의 심볼 표가 없는 이미지의 id를 보여 주고,
+그 id는 `dwarfdump --uuid`가 찍는 값에서 하이픈을 빼고 소문자로 바꾼 것입니다. 이 맥의
+모든 dSYM을 훑어 그 UUID를 가진 것만 찍습니다. 찍히는 줄이 올릴 파일입니다.
+
+```sh
+find ~/Library/Developer -name '*.dSYM' -exec dwarfdump --uuid {} + \
+  | grep -iE '<UUID>|<UUID>'
+```
+
+아무것도 안 나오면 그 빌드의 dSYM이 이 맥에 없는 것입니다. 위 표에서 그 빌드가 어디서
+왔는지 다시 봅니다.
+
+찾은 dSYM 하나에 `dwarfdump --uuid`를 직접 돌려 두 줄 이상 나오면 아키텍처가 둘
+이상이고, 첫 번째 것만 풀립니다. 먼저 자릅니다.
+`lipo -thin arm64 <dwarf> -output <dwarf>-arm64`
+
+프레임에 나오는 이미지마다 하나씩 필요합니다. 앱과, 자기 UUID를 갖는 동적 프레임워크
+각각입니다. 정적 라이브러리는 앱 바이너리에 링크되므로 앱 dSYM에 포함됩니다. 시스템
+프레임워크는 걸러지므로 올릴 필요가 없습니다.
+
+가장 빠른 길은 대시보드입니다. 프레임이 읽히지 않는 크래시를 열면 심볼 상자가 있고,
+찾아 둔 `.dSYM` 폴더를 그대로 놓으면 안의 바이너리를 꺼내 올립니다. `dSYMs` 폴더째
+놓으면 이미지마다 하나씩 전부 올라갑니다. 세션으로 인증하므로 토큰이 필요 없고, 그
+앱에 디버그 파일이 하나도 없을 때만 나옵니다.
+
+API는 폴더를 받지 않습니다. 올릴 것은 그 안의 Mach-O 바이너리이고, 이미지마다
+하나씩입니다.
+
+```
+<App>.app.dSYM/Contents/Resources/DWARF/<App>
+```
+
+릴리스가 사용자에게 닿기 전에 올립니다. 늦게 올려도 버려지지 않습니다. 이미 쌓인
+크래시를 그 파일로 다시 읽어, 읽히는 이름의 이슈로 다시 묶습니다. 같은 빌드에 다른
+파일을 올리면 기록된 것을 교체합니다.
+
+개발 중 크래시까지 풀리게 하려면 빌드마다 올립니다. Xcode의 Run Script 단계가 그
+자리이고, Crashlytics가 dSYM을 받는 방식과 같습니다. Build Phases에서 New Run Script
+Phase를 맨 아래에 두고, Debug 구성에 `DEBUG_INFORMATION_FORMAT = dwarf-with-dsym`을
+켭니다.
+
+```sh title="Run Script (Build Phases)"
+# 빌드마다, 이 빌드가 만든 dSYM 전부(앱과 프레임워크 각각). 토큰은 xcconfig나
+# 사용자 정의 빌드 설정 ATLAS_API_TOKEN으로 넣습니다.
+[ "$DEBUG_INFORMATION_FORMAT" = "dwarf-with-dsym" ] || exit 0
+for dwarf in "$DWARF_DSYM_FOLDER_PATH"/*.dSYM/Contents/Resources/DWARF/*; do
+  curl --fail -s -X POST \
+    "https://appatlas.dev/api/ingest/symbols?store=app-store&appId=$PRODUCT_BUNDLE_IDENTIFIER" \
+    -H "Authorization: Bearer $ATLAS_API_TOKEN" \
+    --data-binary "@$dwarf" || true
+done
+```
 
 ```sh title="upload-dsyms.sh"
 # CI, 아카이브 다음. 아카이브의 dSYM마다 한 번(앱과 프레임워크 각각).
-# ATLAS_API_TOKEN은 App Atlas API 액세스 토큰이며 SDK 키가 아닙니다.
+# ATLAS_API_TOKEN은 빌드 심볼 업로드 권한을 가진 App Atlas API 액세스 토큰이며
+# SDK 키가 아닙니다.
 for dwarf in "$ARCHIVE_PATH"/dSYMs/*.dSYM/Contents/Resources/DWARF/*; do
   curl --fail -X POST \
-    "https://appatlas.dev/api/ingest/symbols?store=app-store&appId=$BUNDLE_ID&kind=macho" \
+    "https://appatlas.dev/api/ingest/symbols?store=app-store&appId=$BUNDLE_ID" \
     -H "Authorization: Bearer $ATLAS_API_TOKEN" \
     --data-binary "@$dwarf"
 done
 ```
-
-비트코드로 재컴파일된 빌드의 dSYM은 처리 후 App Store Connect에서 받습니다.
-같은 방법으로 올립니다.
 
 ## 프라이버시
 
